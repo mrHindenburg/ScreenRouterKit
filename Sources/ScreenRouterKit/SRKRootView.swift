@@ -28,9 +28,13 @@ public struct SRKRootView: View {
             }
         }
         .onChange(of: vm.presented) { newState in
+            let isSimpleMode = ScreenRouterKit.shared.config?.splashProviderSimple != nil
+
             switch newState {
             case .main, .web:
-                fadeOutSplash()
+                if !isSimpleMode {
+                    fadeOutSplash()
+                }
             case .loading:
                 splashOpacity = 1
                 splashVisible = true

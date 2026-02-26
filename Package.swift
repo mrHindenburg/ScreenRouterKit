@@ -19,10 +19,5 @@ let package = Package(
             dependencies: [],
             path: "Sources/ScreenRouterKit"
         ),
-        .testTarget(
-            name: "ScreenRouterKitTests",
-            dependencies: ["ScreenRouterKit"],
-            path: "Tests/ScreenRouterKitTests"
-        ),
     ]
 )

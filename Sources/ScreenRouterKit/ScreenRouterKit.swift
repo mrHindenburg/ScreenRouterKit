@@ -38,7 +38,7 @@ public final class ScreenRouterKit {
     /// ```
     public func present(
         splash:   @escaping SRKSplashProviderSimple,
-        mainView: SRKMainViewProvider? = nil,
+        mainView: @escaping SRKMainViewProvider,
         debugMode: SRKDebugMode = .disabled,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations:     UIInterfaceOrientationMask = .all
@@ -55,12 +55,9 @@ public final class ScreenRouterKit {
 
         configure(config)
 
-        // In simple mode pipeline just sets .main immediately —
-        // actual dismissal is driven by onComplete() from SplashView
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.startSimple()
         }
-
         return makeRootView()
     }
 
