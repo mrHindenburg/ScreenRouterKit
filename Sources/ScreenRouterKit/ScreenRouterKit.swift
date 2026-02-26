@@ -1,8 +1,53 @@
-/// ScreenRouterKit.swift
+// ScreenRouterKit.swift
 // ScreenRouterKit
 
 import SwiftUI
 import Combine
+
+// MARK: - Transition Config
+
+/// Controls how the splash screen disappears.
+/// Pass to present() / start() / startWithTracking().
+public struct SRKTransitionConfig: Sendable {
+
+    public let animation: Animation
+    public let type: SRKTransitionType
+
+    public init(
+        type:      SRKTransitionType = .fade,
+        animation: Animation         = .easeInOut(duration: 0.6)
+    ) {
+        self.type      = type
+        self.animation = animation
+    }
+
+    /// Fade out — default
+    public static let fade = SRKTransitionConfig(type: .fade, animation: .easeInOut(duration: 0.6))
+
+    /// Slide splash upward
+    public static let slideUp = SRKTransitionConfig(type: .slide(.up), animation: .easeInOut(duration: 0.5))
+
+    /// Slide splash downward
+    public static let slideDown = SRKTransitionConfig(type: .slide(.down), animation: .easeInOut(duration: 0.5))
+
+    /// Scale + fade
+    public static let scale = SRKTransitionConfig(type: .scale, animation: .easeInOut(duration: 0.5))
+
+    /// Custom — provide your own type and animation
+    public static func custom(type: SRKTransitionType, animation: Animation) -> SRKTransitionConfig {
+        SRKTransitionConfig(type: type, animation: animation)
+    }
+}
+
+public enum SRKTransitionType: Sendable {
+    case fade
+    case slide(Edge)
+    case scale
+
+    public enum Edge: Sendable {
+        case up, down, left, right
+    }
+}
 
 // MARK: - ScreenRouterKit Facade
 
@@ -17,6 +62,7 @@ public final class ScreenRouterKit {
     // MARK: Internal State
 
     private(set) var config: SRKConfiguration?
+    private(set) var transitionConfig: SRKTransitionConfig = .fade
     private(set) var mainViewProvider: SRKMainViewProvider?
     private var viewModel: SRKViewModel?
     private var started = false
@@ -37,14 +83,16 @@ public final class ScreenRouterKit {
     /// }
     /// ```
     public func present(
-        splash:   @escaping SRKSplashProviderSimple,
+        transition: SRKTransitionConfig = .fade,
+        splash: @escaping SRKSplashProviderSimple,
         mainView: @escaping SRKMainViewProvider,
         debugMode: SRKDebugMode = .disabled,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
-        webOrientations:     UIInterfaceOrientationMask = .all
+        webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
 
-        mainViewProvider = mainView
+        mainViewProvider    = mainView
+        transitionConfig    = transition
 
         let config = SRKConfiguration(
             splash:              splash,
@@ -55,9 +103,12 @@ public final class ScreenRouterKit {
 
         configure(config)
 
+        // In simple mode pipeline just sets .main immediately —
+        // actual dismissal is driven by onComplete() from SplashView
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.startSimple()
         }
+
         return makeRootView()
     }
 
@@ -83,8 +134,8 @@ public final class ScreenRouterKit {
         registerURL: String,
         syncURL: String,
         bundleID: String,
-        splash: SRKSplashProvider? = nil,
-        mainView: SRKMainViewProvider? = nil,
+        splash: SRKSplashProvider?,
+        mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .disabled,
         pushEnabled: Bool = true,
         fallbackURL: String? = nil,
@@ -95,16 +146,16 @@ public final class ScreenRouterKit {
         mainViewProvider = mainView
 
         let config = SRKConfiguration(
-            registerURL:  registerURL,
-            syncURL:  syncURL,
-            bundleID:    bundleID,
+            registerURL: registerURL,
+            syncURL: syncURL,
+            bundleID: bundleID,
             attHandling: .managedByLibrary,
-            splash:      splash,
-            debugMode:   debugMode,
+            splash: splash,
+            debugMode: debugMode,
             pushEnabled: pushEnabled,
             fallbackURL: fallbackURL,
             defaultOrientations: defaultOrientations,
-            webOrientations:     webOrientations
+            webOrientations: webOrientations
         )
 
         configure(config)
@@ -138,8 +189,8 @@ public final class ScreenRouterKit {
         registerURL: String,
         syncURL: String,
         bundleID: String,
-        splash: SRKSplashProvider? = nil,
-        mainView: SRKMainViewProvider? = nil,
+        splash: SRKSplashProvider?,
+        mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .disabled,
         pushEnabled: Bool = true,
         fallbackURL: String? = nil,

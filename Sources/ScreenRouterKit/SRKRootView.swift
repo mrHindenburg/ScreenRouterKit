@@ -9,8 +9,10 @@ public struct SRKRootView: View {
 
     @EnvironmentObject private var vm: SRKViewModel
 
-    @State private var splashOpacity: Double = 1
-    @State private var splashVisible: Bool   = true
+    @State private var splashOpacity: Double  = 1
+    @State private var splashOffset:  CGSize  = .zero
+    @State private var splashScale:   CGFloat = 1
+    @State private var splashVisible: Bool    = true
 
     public init() {}
 
@@ -19,10 +21,12 @@ public struct SRKRootView: View {
             // ── Main / Web content (rendered beneath splash) ─────────────
             content
 
-            // ── Splash layer (fades out on top) ───────────────────────────
+            // ── Splash layer (transitions out on top) ─────────────────────
             if splashVisible {
                 splashLayer
                     .opacity(splashOpacity)
+                    .offset(splashOffset)
+                    .scaleEffect(splashScale)
                     .ignoresSafeArea()
                     .zIndex(1)
             }
@@ -37,6 +41,8 @@ public struct SRKRootView: View {
                 }
             case .loading:
                 splashOpacity = 1
+                splashOffset  = .zero
+                splashScale   = 1
                 splashVisible = true
             }
         }
@@ -51,7 +57,9 @@ public struct SRKRootView: View {
         if let splashSimple = kit.config?.splashProviderSimple {
             // Simple mode — SplashView calls onComplete() when animation finishes
             splashSimple {
-                fadeOutSplash()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    fadeOutSplash()
+                }
             }
         } else if let splash = kit.config?.splashProvider {
             // Full mode — library dismisses splash when pipeline resolves
@@ -91,16 +99,44 @@ public struct SRKRootView: View {
         }
     }
 
-    // MARK: - Fade
+    // MARK: - Dismiss
 
     private func fadeOutSplash() {
         guard splashVisible else { return }
-        withAnimation(.easeInOut(duration: 0.6)) {
-            splashOpacity = 0
+        let config = ScreenRouterKit.shared.transitionConfig
+
+        withAnimation(config.animation) {
+            switch config.type {
+            case .fade:
+                splashOpacity = 0
+
+            case .scale:
+                splashOpacity = 0
+                splashScale   = 1.15
+
+            case .slide(let edge):
+                switch edge {
+                case .up:    splashOffset = CGSize(width: 0, height: -UIScreen.main.bounds.height)
+                case .down:  splashOffset = CGSize(width: 0, height:  UIScreen.main.bounds.height)
+                case .left:  splashOffset = CGSize(width: -UIScreen.main.bounds.width,  height: 0)
+                case .right: splashOffset = CGSize(width:  UIScreen.main.bounds.width,  height: 0)
+                }
+            }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+
+        // Remove from hierarchy after animation completes
+        let duration = animationDuration(config.animation)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.05) {
             splashVisible = false
         }
+    }
+
+    /// Extracts approximate duration from Animation for cleanup timing.
+    private func animationDuration(_ animation: Animation) -> Double {
+        // SwiftUI Animation doesn't expose duration directly —
+        // we use a reasonable fallback that covers most cases.
+        // Host can tune via SRKTransitionConfig.animation.
+        return 0.7
     }
 }
 
