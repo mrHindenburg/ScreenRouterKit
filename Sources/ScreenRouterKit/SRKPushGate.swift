@@ -1,4 +1,4 @@
-// WLKPushGate.swift
+// SRKPushGate.swift
 // ScreenRouterKit
 
 import UIKit
@@ -6,27 +6,27 @@ import UserNotifications
 
 // MARK: - Push Gate
 
-final class WLKPushGate: Sendable {
+final class SRKPushGate: Sendable {
 
     // MARK: Shared token storage
     // Updated from AppDelegate via ScreenRouterKit.shared.handleFCMToken / handleAPNSToken
 
-    static let shared = WLKPushGate(enabled: true)
+    static let shared = SRKPushGate(enabled: true)
 
     private let enabled: Bool
 
     // Thread-safe token storage
     private let _fcmToken  = TokenBox()
-    private let _apnsToken = TokenBox()
+    private let _srk_apnsToken = TokenBox()
 
     var fcmToken: String? {
         get { _fcmToken.value }
         set { _fcmToken.value = newValue }
     }
 
-    var apnsToken: String? {
-        get { _apnsToken.value }
-        set { _apnsToken.value = newValue }
+    var srk_apnsToken: String? {
+        get { _srk_apnsToken.value }
+        set { _srk_apnsToken.value = newValue }
     }
 
     init(enabled: Bool) {
@@ -42,7 +42,7 @@ final class WLKPushGate: Sendable {
         if enabled {
             await requestPermission()
         } else {
-            WLKLogger.log(.debug, "Push: permission request skipped (pushEnabled=false)")
+            SRKLogger.log(.debug, "Push: permission request skipped (pushEnabled=false)")
         }
 
         // Register for remote notifications (required for FCM)
@@ -62,33 +62,33 @@ final class WLKPushGate: Sendable {
 
         // Already answered — do not show the alert again
         guard current.authorizationStatus == .notDetermined else {
-            WLKLogger.log(.debug, "Push: already authorized — status=\(current.authorizationStatus.rawValue)")
+            SRKLogger.log(.debug, "Push: already authorized — status=\(current.authorizationStatus.rawValue)")
             return
         }
 
         do {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-            WLKLogger.log(.info, "Push: user responded — granted=\(granted)")
+            SRKLogger.log(.info, "Push: user responded — granted=\(granted)")
         } catch {
-            WLKLogger.log(.error, "Push: permission request error — \(error.localizedDescription)")
+            SRKLogger.log(.error, "Push: permission request error — \(error.localizedDescription)")
         }
     }
 
     private func waitForFCMToken(timeoutSeconds: Double = 6.0) async -> String? {
-        WLKLogger.log(.debug, "Push: waiting for FCM token (timeout=\(timeoutSeconds)s)")
+        SRKLogger.log(.debug, "Push: waiting for FCM token (timeout=\(timeoutSeconds)s)")
 
         let deadline = Date().addingTimeInterval(timeoutSeconds)
 
         while Date() < deadline {
             // Check in-memory first (updated from AppDelegate)
             if let token = fcmToken, !token.isEmpty {
-                WLKLogger.log(.info, "Push: FCM token received")
+                SRKLogger.log(.info, "Push: FCM token received")
                 return token
             }
 
             // Fallback — UserDefaults (may have been saved by AppDelegate earlier)
-            if let stored = UserDefaults.standard.string(forKey: "fcmToken"), !stored.isEmpty {
-                WLKLogger.log(.debug, "Push: FCM token from UserDefaults")
+            if let stored = UserDefaults.standard.string(forKey: "srk.fcm.token"), !stored.isEmpty {
+                SRKLogger.log(.debug, "Push: FCM token from UserDefaults")
                 fcmToken = stored
                 return stored
             }
@@ -97,13 +97,13 @@ final class WLKPushGate: Sendable {
         }
 
         // Last chance after timeout
-        let fallback = UserDefaults.standard.string(forKey: "fcmToken")
+        let fallback = UserDefaults.standard.string(forKey: "srk.fcm.token")
         if let fallback, !fallback.isEmpty {
-            WLKLogger.log(.warning, "Push: FCM token from fallback after timeout")
+            SRKLogger.log(.warning, "Push: FCM token from fallback after timeout")
             return fallback
         }
 
-        WLKLogger.log(.warning, "Push: FCM token not received within \(timeoutSeconds)s — sending empty")
+        SRKLogger.log(.warning, "Push: FCM token not received within \(timeoutSeconds)s — sending empty")
         return nil
     }
 }

@@ -1,12 +1,4 @@
-//
-//  AppDelegate.swift
-//  ScreenRouterKit
-//
-//  Created by Tymur Batulin on 23.02.2026.
-//
-
-
-// WLKAppDelegate.swift
+// SRKAppDelegate.swift
 // ScreenRouterKit
 
 import UIKit
@@ -14,37 +6,43 @@ import UserNotifications
 import AppTrackingTransparency
 import AdSupport
 
-// MARK: - WLKAppDelegate
+// MARK: - SRKAppDelegate
 
-/// ── Ver A - no  AppsFlyer
+/// Base AppDelegate with all ScreenRouterKit logic built in.
+///
+/// Host subclasses this and overrides only what is specific to its project.
+///
+/// ── Variant A (without AppsFlyer) ──────────────────────────────────────────────
 /// ```swift
 /// import FirebaseCore
 /// import FirebaseMessaging
 /// import ScreenRouterKit
 ///
-/// final class AppDelegate: WLKAppDelegate, MessagingDelegate {
+/// final class AppDelegate: SRKAppDelegate {
 ///
 ///     override func firebaseConfigure() {
 ///         FirebaseApp.configure()
 ///         Messaging.messaging().delegate = self
 ///     }
+/// }
+///
+/// extension AppDelegate: MessagingDelegate {
 ///     func messaging(_ messaging: Messaging,
 ///                    didReceiveRegistrationToken fcmToken: String?) {
 ///         guard let token = fcmToken else { return }
 ///         ScreenRouterKit.shared.handleFCMToken(token)
 ///     }
-///
 /// }
 /// ```
 ///
-/// ── Ver B - with AppsFlyer) ──────────────────────────────────────────────────
+/// ── Variant B (with AppsFlyer) ────────────────────────────────────────────────
 /// ```swift
 /// import FirebaseCore
 /// import FirebaseMessaging
 /// import AppsFlyerLib
 /// import ScreenRouterKit
 ///
-/// final class AppDelegate: WLKAppDelegate, MessagingDelegate, AppsFlyerLibDelegate {
+/// final class AppDelegate: SRKAppDelegate {
 ///
 ///     override func firebaseConfigure() {
 ///         FirebaseApp.configure()
@@ -56,25 +54,29 @@ import AdSupport
 ///         AppsFlyerLib.shared().appleAppID      = "YOUR_APPLE_APP_ID"
 ///         AppsFlyerLib.shared().delegate        = self
 ///     }
+/// }
 ///
+/// extension AppDelegate: MessagingDelegate {
 ///     func messaging(_ messaging: Messaging,
 ///                    didReceiveRegistrationToken fcmToken: String?) {
 ///         guard let token = fcmToken else { return }
 ///         ScreenRouterKit.shared.handleFCMToken(token)
 ///     }
+/// }
 ///
-///      func onConversionDataSuccess(_ info: [AnyHashable: Any]) {}
-///      func onConversionDataFail(_ error: Error) {}
+/// extension AppDelegate: AppsFlyerLibDelegate {
+///     func onConversionDataSuccess(_ info: [AnyHashable: Any]) {}
+///     func onConversionDataFail(_ error: Error) {}
 /// }
 /// ```
-open class WLKAppDelegate: NSObject, UIApplicationDelegate {
+open class SRKAppDelegate: NSObject, UIApplicationDelegate {
 
     // MARK: - Internal State
 
-    /// ATT Signal for variant B — set by ScreenRouterKit.shared.launchWithAppsFlyer(...)
-    var attSignal: WLKATTSignal?
+    /// ATT Signal for variant B — set by ScreenRouterKit.shared.startWithTracking(...)
+    var attSignal: SRKATTSignal?
 
-    /// Whether AppsFlyer is enabled — set automatically by launchWithAppsFlyer()
+    /// Whether AppsFlyer is enabled — set automatically by startWithTracking()
     var appsFlyerEnabled: Bool = false
 
     // MARK: - didFinishLaunching
@@ -92,7 +94,7 @@ open class WLKAppDelegate: NSObject, UIApplicationDelegate {
             appsFlyerConfigure()
         }
 
-        WLKLogger.log(.debug, "AppDelegate: didFinishLaunching")
+        SRKLogger.log(.debug, "AppDelegate: didFinishLaunching")
         return true
     }
 
@@ -101,7 +103,7 @@ open class WLKAppDelegate: NSObject, UIApplicationDelegate {
     /// Override and add FirebaseApp.configure() + Messaging.messaging().delegate = self
     open func firebaseConfigure() {
         // Empty by default — override in host
-        WLKLogger.log(.warning, "AppDelegate: firebaseConfigure() not overridden — Firebase not configured")
+        SRKLogger.log(.warning, "AppDelegate: firebaseConfigure() not overridden — Firebase not configured")
     }
 
     /// Override and add AppsFlyerLib keys (variant B only)
@@ -117,7 +119,7 @@ open class WLKAppDelegate: NSObject, UIApplicationDelegate {
 
     // MARK: - ATT (internal)
 
-    /// Called by ScreenRouterKit.shared.launchWithAppsFlyer()
+    /// Called by ScreenRouterKit.shared.startWithTracking()
     func performATTForAppsFlyer() {
         ATTrackingManager.requestTrackingAuthorization { [weak self] status in
             let authorized = (status == .authorized)
@@ -125,8 +127,8 @@ open class WLKAppDelegate: NSObject, UIApplicationDelegate {
             // 1. Save IDFA if authorized
             if authorized {
                 let idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
-                UserDefaults.standard.set(idfa, forKey: "wlk.device.idfa")
-                WLKLogger.log(.info, "AppDelegate: IDFA saved")
+                UserDefaults.standard.set(idfa, forKey: "srk.device.idfa")
+                SRKLogger.log(.info, "AppDelegate: IDFA saved")
             }
 
             // 2. Start AppsFlyer — IDFA is already available
@@ -135,15 +137,15 @@ open class WLKAppDelegate: NSObject, UIApplicationDelegate {
                 let afInstance = afClass.value(forKeyPath: "shared") as AnyObject
                 _ = afInstance.perform(NSSelectorFromString("start"))
 
-                // Store AppsFlyer UID for /install request body
+                // Store AppsFlyer UID for /register request body
                 if let uid = afInstance.perform(NSSelectorFromString("getAppsFlyerUID"))?
                     .takeUnretainedValue() as? String {
-                    UserDefaults.standard.set(uid, forKey: "wlk.appsflyer.id")
-                    WLKLogger.log(.info, "AppDelegate: AppsFlyer UID saved")
+                    UserDefaults.standard.set(uid, forKey: "srk.appsflyer.id")
+                    SRKLogger.log(.info, "AppDelegate: AppsFlyer UID saved")
                 }
             }
 
-            WLKLogger.log(.info, "AppDelegate: ATT completed — authorized=\(authorized)")
+            SRKLogger.log(.info, "AppDelegate: ATT completed — authorized=\(authorized)")
             self?.attDidComplete(authorized: authorized)
 
             // 3. Unblock the pipeline
@@ -157,7 +159,7 @@ open class WLKAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        WLKLogger.log(.info, "AppDelegate: APNs token received")
+        SRKLogger.log(.info, "AppDelegate: APNs token received")
         // Forward to Messaging via reflection to avoid importing Firebase into the library
         if let messagingClass = NSClassFromString("FIRMessaging") as? NSObject.Type {
             let instance = messagingClass.value(forKeyPath: "messaging") as AnyObject
@@ -170,7 +172,7 @@ open class WLKAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        WLKLogger.log(.error, "AppDelegate: APNs error — \(error.localizedDescription)")
+        SRKLogger.log(.error, "AppDelegate: APNs error — \(error.localizedDescription)")
     }
 
     // MARK: - Orientation
@@ -185,7 +187,7 @@ open class WLKAppDelegate: NSObject, UIApplicationDelegate {
 
 // MARK: - UNUserNotificationCenterDelegate
 
-extension WLKAppDelegate: UNUserNotificationCenterDelegate {
+extension SRKAppDelegate: UNUserNotificationCenterDelegate {
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,

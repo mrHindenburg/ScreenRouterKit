@@ -1,14 +1,10 @@
-// ScreenRouterKit.swift
+/// ScreenRouterKit.swift
 // ScreenRouterKit
 
 import SwiftUI
 import Combine
 
-// MARK: - View Provider
-
-public typealias WLKMainViewProvider = () -> AnyView
-
-// MARK: - WebLoaderKit Facade
+// MARK: - ScreenRouterKit Facade
 
 @MainActor
 public final class ScreenRouterKit {
@@ -20,10 +16,53 @@ public final class ScreenRouterKit {
 
     // MARK: Internal State
 
-    private(set) var config: WLKConfiguration?
-    private(set) var mainViewProvider: WLKMainViewProvider?
-    private var viewModel: WLKViewModel?
+    private(set) var config: SRKConfiguration?
+    private(set) var mainViewProvider: SRKMainViewProvider?
+    private var viewModel: SRKViewModel?
     private var started = false
+
+    // MARK: ─────────────────────────────────────────────────────────────────
+    // MARK: SIMPLE — splash only, no networking
+    // MARK: ─────────────────────────────────────────────────────────────────
+
+    /// Simple entry point — no API, no ATT, no push.
+    /// Library shows splash, waits for onComplete() callback, then fades to mainView.
+    ///
+    /// ```swift
+    /// WindowGroup {
+    ///     ScreenRouterKit.shared.present(
+    ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
+    ///         mainView: { AnyView(ContentView()) }
+    ///     )
+    /// }
+    /// ```
+    public func present(
+        splash:   @escaping SRKSplashProviderSimple,
+        mainView: SRKMainViewProvider? = nil,
+        debugMode: SRKDebugMode = .disabled,
+        defaultOrientations: UIInterfaceOrientationMask = .portrait,
+        webOrientations:     UIInterfaceOrientationMask = .all
+    ) -> some View {
+
+        mainViewProvider = mainView
+
+        let config = SRKConfiguration(
+            splash:              splash,
+            debugMode:           debugMode,
+            defaultOrientations: defaultOrientations,
+            webOrientations:     webOrientations
+        )
+
+        configure(config)
+
+        // In simple mode pipeline just sets .main immediately —
+        // actual dismissal is driven by onComplete() from SplashView
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.startSimple()
+        }
+
+        return makeRootView()
+    }
 
     // MARK: ─────────────────────────────────────────────────────────────────
     // MARK: VARIANT A — without AppsFlyer
@@ -34,22 +73,22 @@ public final class ScreenRouterKit {
     ///
     /// ```swift
     /// WindowGroup {
-    ///     ScreenRouterKit.shared.launch(
-    ///         installURL: "https://your-domain.com/v1/public/install",
-    ///         refreshURL: "https://your-domain.com/v1/public/refresh",
+    ///     ScreenRouterKit.shared.start(
+    ///         registerURL: "https://your-domain.com/v1/public/register",
+    ///         syncURL: "https://your-domain.com/v1/public/sync",
     ///         bundleID:   "6759095589",
     ///         splash:     { AnyView(SplashView()) },
     ///         mainView:   { AnyView(ContentView()) }
     ///     )
     /// }
     /// ```
-    public func launch(
-        installURL: String,
-        refreshURL: String,
+    public func start(
+        registerURL: String,
+        syncURL: String,
         bundleID: String,
-        splash: WLKSplashProvider? = nil,
-        mainView: WLKMainViewProvider? = nil,
-        debugMode: WLKDebugMode = .disabled,
+        splash: SRKSplashProvider? = nil,
+        mainView: SRKMainViewProvider? = nil,
+        debugMode: SRKDebugMode = .disabled,
         pushEnabled: Bool = true,
         fallbackURL: String? = nil,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
@@ -58,15 +97,15 @@ public final class ScreenRouterKit {
 
         mainViewProvider = mainView
 
-        let config = WLKConfiguration(
-            installURL:          installURL,
-            refreshURL:          refreshURL,
-            bundleID:            bundleID,
-            attHandling:         .managedByLibrary,
-            splashProvider:      splash,
-            debugMode:           debugMode,
-            pushEnabled:         pushEnabled,
-            fallbackURL:         fallbackURL,
+        let config = SRKConfiguration(
+            registerURL:  registerURL,
+            syncURL:  syncURL,
+            bundleID:    bundleID,
+            attHandling: .managedByLibrary,
+            splash:      splash,
+            debugMode:   debugMode,
+            pushEnabled: pushEnabled,
+            fallbackURL: fallbackURL,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations
         )
@@ -85,26 +124,26 @@ public final class ScreenRouterKit {
     // MARK: ─────────────────────────────────────────────────────────────────
 
     /// Single entry point for variant B.
-    /// Identical interface to launch() — host sees no difference.
+    /// Identical interface to start() — host sees no difference.
     ///
     /// ```swift
     /// WindowGroup {
-    ///     ScreenRouterKit.shared.launchWithAppsFlyer(
-    ///         installURL: "https://your-domain.com/v1/public/install",
-    ///         refreshURL: "https://your-domain.com/v1/public/refresh",
+    ///     ScreenRouterKit.shared.startWithTracking(
+    ///         registerURL: "https://your-domain.com/v1/public/register",
+    ///         syncURL: "https://your-domain.com/v1/public/sync",
     ///         bundleID:   "6759095589",
     ///         splash:     { AnyView(SplashView()) },
     ///         mainView:   { AnyView(ContentView()) }
     ///     )
     /// }
     /// ```
-    public func launchWithAppsFlyer(
-        installURL: String,
-        refreshURL: String,
+    public func startWithTracking(
+        registerURL: String,
+        syncURL: String,
         bundleID: String,
-        splash: WLKSplashProvider? = nil,
-        mainView: WLKMainViewProvider? = nil,
-        debugMode: WLKDebugMode = .disabled,
+        splash: SRKSplashProvider? = nil,
+        mainView: SRKMainViewProvider? = nil,
+        debugMode: SRKDebugMode = .disabled,
         pushEnabled: Bool = true,
         fallbackURL: String? = nil,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
@@ -113,24 +152,24 @@ public final class ScreenRouterKit {
 
         mainViewProvider = mainView
 
-        let signal = WLKATTSignal()
+        let signal = SRKATTSignal()
 
-        if let delegate = UIApplication.shared.delegate as? WLKAppDelegate {
+        if let delegate = UIApplication.shared.delegate as? SRKAppDelegate {
             delegate.attSignal        = signal
             delegate.appsFlyerEnabled = true
         } else {
-            WLKLogger.log(.warning, "launchWithAppsFlyer: AppDelegate is not WLKAppDelegate")
+            SRKLogger.log(.warning, "startWithTracking: AppDelegate is not SRKAppDelegate")
         }
 
-        let config = WLKConfiguration(
-            installURL:          installURL,
-            refreshURL:          refreshURL,
+        let config = SRKConfiguration(
+            registerURL:          registerURL,
+            syncURL:          syncURL,
             bundleID:            bundleID,
             attSignal:           signal,
             appsFlyerIDProvider: {
-                UserDefaults.standard.string(forKey: "wlk.appsflyer.id")
+                UserDefaults.standard.string(forKey: "srk.appsflyer.id")
             },
-            splashProvider:      splash,
+            splash:              splash,
             debugMode:           debugMode,
             pushEnabled:         pushEnabled,
             fallbackURL:         fallbackURL,
@@ -143,7 +182,7 @@ public final class ScreenRouterKit {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             self.start()
 
-            if let delegate = UIApplication.shared.delegate as? WLKAppDelegate {
+            if let delegate = UIApplication.shared.delegate as? SRKAppDelegate {
                 delegate.performATTForAppsFlyer()
             }
         }
@@ -155,46 +194,57 @@ public final class ScreenRouterKit {
     // MARK: Core API
     // MARK: ─────────────────────────────────────────────────────────────────
 
-    public func configure(_ config: WLKConfiguration) {
+    public func configure(_ config: SRKConfiguration) {
         self.config = config
-        WLKLogger.mode = config.debugMode
-        WLKLogger.log(.info, "WebLoaderKit: configure() bundleID=\(config.bundleID)")
+        SRKLogger.mode = config.debugMode
+        SRKLogger.log(.info, "ScreenRouterKit: configure() bundleID=\(config.bundleID)")
     }
 
     public func makeRootView() -> some View {
         let vm = getOrCreateViewModel()
-        return WLKRootView().environmentObject(vm)
+        return SRKRootView().environmentObject(vm)
     }
 
     public func start() {
         guard let config else {
-            WLKLogger.log(.error, "WebLoaderKit: start() called before configure()")
+            SRKLogger.log(.error, "ScreenRouterKit: start() called before configure()")
             return
         }
         guard !started else {
-            WLKLogger.log(.debug, "WebLoaderKit: start() already called")
+            SRKLogger.log(.debug, "ScreenRouterKit: start() already called")
             return
         }
         started = true
-        WLKLogger.log(.info, "WebLoaderKit: start()")
+        SRKLogger.log(.info, "ScreenRouterKit: start()")
 
         guard let vm = viewModel else {
-            WLKLogger.log(.error, "WebLoaderKit: ViewModel not found")
+            SRKLogger.log(.error, "ScreenRouterKit: ViewModel not found")
             return
         }
         vm.begin(config: config)
+    }
+
+
+    func startSimple() {
+        guard let config, !started else { return }
+        started = true
+        SRKLogger.mode = config.debugMode
+        SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
+        // Immediately set .main — RootView shows mainView under splash
+        // Splash will fade out when SplashView calls onComplete()
+        viewModel?.setMain()
     }
 
     // MARK: - Token Handlers
 
     public func handleAPNSToken(_ data: Data) {
         let hex = data.map { String(format: "%02.2hhx", $0) }.joined()
-        WLKLogger.log(.info, "WebLoaderKit: APNs (\(hex))")
-        UserDefaults.standard.set(true, forKey: "apnsReady")
-        UserDefaults.standard.set(hex,  forKey: "apnsTokenHex")
-        WLKPushGate.shared.apnsToken = hex
-        NotificationCenter.default.post(name: .wlkAPNSTokenDidUpdate, object: nil,
-                                        userInfo: ["apns": hex])
+        SRKLogger.log(.info, "ScreenRouterKit: APNs (\(hex)")
+        UserDefaults.standard.set(true, forKey: "srkApnsReady")
+        UserDefaults.standard.set(hex,  forKey: "srkApnsTokenHex")
+        SRKPushGate.shared.srk_apnsToken = hex
+        NotificationCenter.default.post(name: .srkAPNSTokenDidUpdate, object: nil,
+                                        userInfo: ["srk_apns": hex])
     }
 
     public func handleFCMToken(_ token: String) {
@@ -203,14 +253,14 @@ public final class ScreenRouterKit {
         let isRefresh = started  // token arrived after pipeline already ran → refresh
 
         if isRefresh {
-            WLKLogger.logKey(.fcmRefresh, "fcm_refresh=\(token)")
+            SRKLogger.logKey(.fcmRefresh, "fcm_refresh=\(token)")
         } else {
-            WLKLogger.logKey(.fcmFirst, "fcm_early=\(token)")
+            SRKLogger.logKey(.fcmFirst, "fcm_early=\(token)")
         }
 
-        UserDefaults.standard.set(token, forKey: "fcmToken")
-        WLKPushGate.shared.fcmToken = token
-        NotificationCenter.default.post(name: .wlkFCMTokenDidUpdate, object: nil,
+        UserDefaults.standard.set(token, forKey: "srk.fcm.token")
+        SRKPushGate.shared.fcmToken = token
+        NotificationCenter.default.post(name: .srkFCMTokenDidUpdate, object: nil,
                                         userInfo: ["token": token])
     }
 
@@ -222,23 +272,23 @@ public final class ScreenRouterKit {
 
     // MARK: - State
 
-    public var presented: WLKPresented {
+    public var presented: SRKScene {
         viewModel?.presented ?? .loading
     }
 
-    public var presentedPublisher: Published<WLKPresented>.Publisher? {
+    public var presentedPublisher: Published<SRKScene>.Publisher? {
         viewModel?.$presented
     }
 
     // MARK: - Reset
 
     public func reset() {
-        WLKLogger.log(.info, "WebLoaderKit: reset()")
+        SRKLogger.log(.info, "ScreenRouterKit: reset()")
         [
-            "wlk.route.lock", "wlk.route.url",
-            "wlk.install.done", "wlk.install.fcm", "wlk.install.device",
-            "wlk.att.authorized", "wlk.stable.uuid",
-            "wlk.device.idfa", "wlk.appsflyer.id"
+            "srk.flow.lock", "srk.flow.url",
+            "srk.session.done", "srk.session.fcm", "srk.session.device",
+            "srk.att.authorized", "srk.stable.uuid",
+            "srk.device.idfa", "srk.appsflyer.id"
         ].forEach { UserDefaults.standard.removeObject(forKey: $0) }
         started          = false
         viewModel        = nil
@@ -247,9 +297,9 @@ public final class ScreenRouterKit {
 
     // MARK: - Private
 
-    private func getOrCreateViewModel() -> WLKViewModel {
+    private func getOrCreateViewModel() -> SRKViewModel {
         if let existing = viewModel { return existing }
-        let vm = WLKViewModel()
+        let vm = SRKViewModel()
         viewModel = vm
         return vm
     }

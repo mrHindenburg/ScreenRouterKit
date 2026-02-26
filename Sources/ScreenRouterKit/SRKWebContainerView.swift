@@ -1,4 +1,4 @@
-// WLKWebContainerView.swift
+// SRKWebContainerView.swift
 // ScreenRouterKit
 
 import SwiftUI
@@ -7,14 +7,14 @@ import Network
 
 // MARK: - Web Container View
 
-struct WLKWebContainerView: View {
+struct SRKWebContainerView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
     let url: String
 
-    @StateObject private var navState    = WLKNavigationState()
-    @StateObject private var connectivity = WLKConnectivityMonitor()
+    @StateObject private var navState    = SRKNavigationState()
+    @StateObject private var connectivity = SRKConnectivityMonitor()
 
     @State private var showAlert    = false
     @State private var alertMessage = ""
@@ -27,12 +27,14 @@ struct WLKWebContainerView: View {
             VStack(spacing: 0) {
 
                 // ── WebView ───────────────────────────────────────────────
-                WLKWebView(urlString: url, navState: navState)
+                SRKWebView(urlString: url, navState: navState)
                     .ignoresSafeArea(edges: .bottom)
                     .onAppear {
                         navState.lastError = nil
                         showAlert = false
                     }
+
+                // ── Navigation Toolbar ────────────────────────────────────
                 navigationToolbar
             }
 
@@ -157,11 +159,11 @@ struct WLKWebContainerView: View {
 
 // MARK: - Connectivity Monitor
 
-final class WLKConnectivityMonitor: ObservableObject {
+final class SRKConnectivityMonitor: ObservableObject {
     @Published private(set) var connected = true
 
     private let monitor = NWPathMonitor()
-    private let queue   = DispatchQueue(label: "wlk.connectivity")
+    private let queue   = DispatchQueue(label: "srk.connectivity")
 
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
