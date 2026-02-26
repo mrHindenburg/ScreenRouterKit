@@ -1,4 +1,4 @@
-// WLKNavigationState.swift
+// SRKNavigationState.swift
 // ScreenRouterKit
 
 import SwiftUI
@@ -7,7 +7,7 @@ import Combine
 
 // MARK: - Navigation Action
 
-enum WLKNavAction {
+enum SRKNavAction {
     case none
     case home
     case back
@@ -19,7 +19,7 @@ enum WLKNavAction {
 
 /// Stores WKWebView state and navigation commands.
 /// Acts as a bridge between SwiftUI and WKWebView.
-final class WLKNavigationState: ObservableObject {
+final class SRKNavigationState: ObservableObject {
 
     // Navigation buttons
     @Published var canGoBack    = false
@@ -32,9 +32,9 @@ final class WLKNavigationState: ObservableObject {
     @Published var lastError: URLError?
 
     // Navigation command — WKWebView observes via Combine
-    @Published var navAction: WLKNavAction = .none
+    @Published var navAction: SRKNavAction = .none
 
-    // Weak ref to WKWebView (set from WLKWebView.makeUIView)
+    // Weak ref to WKWebView (set from SRKWebView.makeUIView)
     weak var webView: WKWebView?
 
     // Saved home request for returning to the initial URL

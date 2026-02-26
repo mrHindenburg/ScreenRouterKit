@@ -1,12 +1,12 @@
-// WLKLogger.swift
+// SRKLogger.swift
 // ScreenRouterKit
 
 import Foundation
 
 // MARK: - Debug Mode
 
-public enum WLKDebugMode: Sendable {
-    /// Silent
+public enum SRKDebugMode: Sendable {
+    /// Silent — for production
     case disabled
     /// Key events only: errors, final URL, FCM tokens, device ID
     case minimal
@@ -16,7 +16,7 @@ public enum WLKDebugMode: Sendable {
 
 // MARK: - Log Level
 
-enum WLKLogLevel: Sendable {
+enum SRKLogLevel: Sendable {
     case error
     case warning
     case info
@@ -37,7 +37,7 @@ enum WLKLogLevel: Sendable {
 // MARK: - Minimal Event Tag
 // Used to filter output in .minimal mode to key events only
 
-enum WLKMinimalTag: String {
+enum SRKMinimalTag: String {
     case finalURL    = "FINAL_URL"
     case fcmFirst    = "FCM_FIRST"
     case fcmRefresh  = "FCM_REFRESH"
@@ -47,14 +47,14 @@ enum WLKMinimalTag: String {
 
 // MARK: - Logger
 
-enum WLKLogger {
+enum SRKLogger {
 
-    static var mode: WLKDebugMode = .disabled
+    static var mode: SRKDebugMode = .disabled
 
     // MARK: - General log
 
     static func log(
-        _ level: WLKLogLevel,
+        _ level: SRKLogLevel,
         _ message: String,
         file: String = #fileID
     ) {
@@ -65,27 +65,27 @@ enum WLKLogger {
         case .minimal:
             // minimal — errors only via general log
             guard level == .error else { return }
-            print("[WLK] \(level.icon) \(message)")
+            print("[SRK] \(level.icon) \(message)")
 
         case .verbose:
             let filename = file.split(separator: "/").last.map(String.init) ?? file
-            print("[WLK][\(level.icon)][\(filename)] \(message)")
+            print("[SRK][\(level.icon)][\(filename)] \(message)")
         }
     }
 
     // MARK: - Key events (printed in minimal and verbose)
 
-    static func logKey(_ tag: WLKMinimalTag, _ message: String, file: String = #fileID) {
+    static func logKey(_ tag: SRKMinimalTag, _ message: String, file: String = #fileID) {
         switch mode {
         case .disabled:
             return
 
         case .minimal:
-            print("[WLK] [\(tag.rawValue)] \(message)")
+            print("[SRK] [\(tag.rawValue)] \(message)")
 
         case .verbose:
             let filename = file.split(separator: "/").last.map(String.init) ?? file
-            print("[WLK][🔑][\(filename)][\(tag.rawValue)] \(message)")
+            print("[SRK][🔑][\(filename)][\(tag.rawValue)] \(message)")
         }
     }
 }

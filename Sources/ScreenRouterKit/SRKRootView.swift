@@ -1,15 +1,14 @@
-// WLKRootView.swift
+// SRKRootView.swift
 // ScreenRouterKit
 
 import SwiftUI
 
 // MARK: - Root View
 
-public struct WLKRootView: View {
+public struct SRKRootView: View {
 
-    @EnvironmentObject private var vm: WLKViewModel
+    @EnvironmentObject private var vm: SRKViewModel
 
-    // Controls the fade-out of the splash layer
     @State private var splashOpacity: Double = 1
     @State private var splashVisible: Bool   = true
 
@@ -17,8 +16,7 @@ public struct WLKRootView: View {
 
     public var body: some View {
         ZStack {
-
-            // ── Main / Web content (always rendered beneath splash) ───────
+            // ── Main / Web content (rendered beneath splash) ─────────────
             content
 
             // ── Splash layer (fades out on top) ───────────────────────────
@@ -34,7 +32,6 @@ public struct WLKRootView: View {
             case .main, .web:
                 fadeOutSplash()
             case .loading:
-                // Reset if library is restarted
                 splashOpacity = 1
                 splashVisible = true
             }
@@ -45,7 +42,15 @@ public struct WLKRootView: View {
 
     @ViewBuilder
     private var splashLayer: some View {
-        if let splash = ScreenRouterKit.shared.config?.splashProvider {
+        let kit = ScreenRouterKit.shared
+
+        if let splashSimple = kit.config?.splashProviderSimple {
+            // Simple mode — SplashView calls onComplete() when animation finishes
+            splashSimple {
+                fadeOutSplash()
+            }
+        } else if let splash = kit.config?.splashProvider {
+            // Full mode — library dismisses splash when pipeline resolves
             splash()
         } else {
             Color(.systemBackground)
@@ -68,14 +73,14 @@ public struct WLKRootView: View {
             }
 
         case .web(let url):
-            WLKWebContainerView(url: url)
+            SRKWebContainerView(url: url)
                 .onAppear {
-                    WLKOrientationProxy.shared.set(
+                    SRKOrientationProxy.shared.set(
                         ScreenRouterKit.shared.config?.webOrientations ?? .all
                     )
                 }
                 .onDisappear {
-                    WLKOrientationProxy.shared.set(
+                    SRKOrientationProxy.shared.set(
                         ScreenRouterKit.shared.config?.defaultOrientations ?? .portrait
                     )
                 }
@@ -85,10 +90,10 @@ public struct WLKRootView: View {
     // MARK: - Fade
 
     private func fadeOutSplash() {
+        guard splashVisible else { return }
         withAnimation(.easeInOut(duration: 0.6)) {
             splashOpacity = 0
         }
-        // Remove from hierarchy after fade completes
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
             splashVisible = false
         }
@@ -97,9 +102,9 @@ public struct WLKRootView: View {
 
 // MARK: - Orientation Proxy
 
-public final class WLKOrientationProxy {
+public final class SRKOrientationProxy {
 
-    public static let shared = WLKOrientationProxy()
+    public static let shared = SRKOrientationProxy()
     private init() {}
 
     public func set(_ mask: UIInterfaceOrientationMask) {
@@ -117,6 +122,6 @@ public final class WLKOrientationProxy {
             ) ? .landscapeRight : .portrait
             UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
         }
-        WLKLogger.log(.debug, "Orientation: \(mask.rawValue)")
+        SRKLogger.log(.debug, "Orientation: \(mask.rawValue)")
     }
 }

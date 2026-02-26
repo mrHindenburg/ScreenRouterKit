@@ -1,4 +1,4 @@
-// WLKLifecycleCoordinator.swift
+// SRKFlowCoordinator.swift
 // ScreenRouterKit
 
 import Foundation
@@ -6,7 +6,7 @@ import Network
 
 // MARK: - Route Lock
 
-enum WLKRoute: String {
+enum SRKRoute: String {
     case main
     case web
 }
@@ -14,18 +14,18 @@ enum WLKRoute: String {
 // MARK: - Coordinator
 
 @MainActor
-final class WLKLifecycleCoordinator {
+final class SRKFlowCoordinator {
 
     // MARK: Dependencies
 
-    private let config: WLKConfiguration
-    private let attGate: WLKATTGate
-    private let pushGate: WLKPushGate
-    private let networkManager: WLKNetworkManager
+    private let config: SRKConfiguration
+    private let attGate: SRKATTGate
+    private let pushGate: SRKPushGate
+    private let networkManager: SRKNetworkManager
 
     // MARK: State
 
-    weak var viewModel: WLKViewModel?
+    weak var viewModel: SRKViewModel?
 
     private var resolved        = false
     private var refreshInFlight = false
@@ -33,36 +33,36 @@ final class WLKLifecycleCoordinator {
 
     // MARK: UserDefaults Keys
 
-    private let routeLockKey     = "wlk.route.lock"
-    private let storedURLKey     = "wlk.route.url"
-    private let installDoneKey   = "wlk.install.done"
-    private let installFCMKey    = "wlk.install.fcm"
-    private let installDeviceKey = "wlk.install.device"
-    private let attAuthorizedKey = "wlk.att.authorized"
-    private let stableUUIDKey    = "wlk.stable.uuid"
+    private let routeLockKey     = "srk.flow.lock"
+    private let storedURLKey     = "srk.flow.url"
+    private let sessionDoneKey   = "srk.session.done"
+    private let sessionFCMKey    = "srk.session.fcm"
+    private let sessionDeviceKey = "srk.session.device"
+    private let attAuthorizedKey = "srk.att.authorized"
+    private let stableUUIDKey    = "srk.stable.uuid"
 
     // MARK: Init
 
-    init(config: WLKConfiguration) {
+    init(config: SRKConfiguration) {
         self.config         = config
-        self.attGate        = WLKATTGate(handling: config.attHandling)
-        self.pushGate       = WLKPushGate(enabled: config.pushEnabled)
-        self.networkManager = WLKNetworkManager(config: config)
+        self.attGate        = SRKATTGate(handling: config.attHandling)
+        self.pushGate       = SRKPushGate(enabled: config.pushEnabled)
+        self.networkManager = SRKNetworkManager(config: config)
     }
 
     // MARK: - Start
 
     func start() {
         guard !resolved else {
-            WLKLogger.log(.debug, "Coordinator: already resolved — start() ignored")
+            SRKLogger.log(.debug, "Coordinator: already resolved — start() ignored")
             return
         }
 
-        WLKLogger.log(.debug, "Coordinator: start()")
+        SRKLogger.log(.debug, "Coordinator: start()")
 
-        // Subsequent launch — read saved lock, skip API call
+        // Subsequent start — read saved lock, skip API call
         if let lock = loadRouteLock() {
-            WLKLogger.log(.info, "Coordinator: found lock=\(lock.rawValue)")
+            SRKLogger.log(.info, "Coordinator: found lock=\(lock.rawValue)")
             applyRoute(lock, url: UserDefaults.standard.string(forKey: storedURLKey))
             resolved = true
             return
@@ -74,12 +74,12 @@ final class WLKLifecycleCoordinator {
     // MARK: - Pipeline
 
     private func runPipeline() async {
-        WLKLogger.log(.debug, "Coordinator: pipeline start")
+        SRKLogger.log(.debug, "Coordinator: pipeline start")
         viewModel?.setLoading()
 
         // ── 1. Network ───────────────────────────────────────────────────
         guard await waitForNetwork() else {
-            WLKLogger.log(.info, "Coordinator: no network → main (no lock)")
+            SRKLogger.log(.info, "Coordinator: no network → main (no lock)")
             viewModel?.setMain()
             resolved = true
             return
@@ -89,21 +89,21 @@ final class WLKLifecycleCoordinator {
         // Variant A: library shows the ATT alert itself
         // Variant B: library waits for signal.complete() from host
         //            (host calls AppsFlyerLib.shared().start() between ATT and this point)
-        WLKLogger.log(.debug, "Coordinator: step 2 — ATT")
+        SRKLogger.log(.debug, "Coordinator: step 2 — ATT")
         let attAuthorized = await attGate.requestIfNeeded()
         UserDefaults.standard.set(attAuthorized, forKey: attAuthorizedKey)
-        WLKLogger.log(.info, "Coordinator: ATT authorized=\(attAuthorized)")
+        SRKLogger.log(.info, "Coordinator: ATT authorized=\(attAuthorized)")
 
         // ── 3. Push + FCM ────────────────────────────────────────────────
-        WLKLogger.log(.debug, "Coordinator: step 3 — Push + FCM")
+        SRKLogger.log(.debug, "Coordinator: step 3 — Push + FCM")
         let fcmToken = await pushGate.requestAndCollect() ?? ""
-        let fcmLog = fcmToken.isEmpty ? "(empty)" : fcmToken
-        WLKLogger.logKey(.fcmFirst, "fcm=\(fcmLog)")
+        let fcmLog = fcmToken.isEmpty ? "(empty)" : String(fcmToken)
+        SRKLogger.logKey(.fcmFirst, "fcm=\(fcmLog)")
 
         // ── 4. Device ID ─────────────────────────────────────────────────
         let deviceID = resolveDeviceID(attAuthorized: attAuthorized)
-        WLKLogger.log(.debug, "Coordinator: deviceID=\(deviceID)")
-        WLKLogger.logKey(.deviceID, "device=\(deviceID)")
+        SRKLogger.log(.debug, "Coordinator: deviceID=\(deviceID)")
+        SRKLogger.logKey(.deviceID, "device=\(deviceID)")
 
         // ── 5. AppsFlyer ID ──────────────────────────────────────────────
         // Variant A: appsFlyerIDProvider == nil → appsFlyerID = ""
@@ -112,15 +112,15 @@ final class WLKLifecycleCoordinator {
         //            by the host in performATTForAppsFlyer(), so UID is available
         let appsFlyerID = config.appsFlyerIDProvider?() ?? ""
         if appsFlyerID.isEmpty {
-            WLKLogger.log(.debug, "Coordinator: AppsFlyer not connected or UID unavailable")
+            SRKLogger.log(.debug, "Coordinator: AppsFlyer not connected or UID unavailable")
         } else {
-            WLKLogger.log(.info, "Coordinator: appsFlyerID=\(appsFlyerID)")
+            SRKLogger.log(.info, "Coordinator: appsFlyerID=\(appsFlyerID)")
         }
 
-        // ── 6. POST /install ─────────────────────────────────────────────
-        WLKLogger.log(.debug, "Coordinator: step 6 — POST /install")
+        // ── 6. POST /register ─────────────────────────────────────────────
+        SRKLogger.log(.debug, "Coordinator: step 6 — POST /register")
 
-        let result = await networkManager.fetchInstall(
+        let result = await networkManager.fetchRegister(
             fcmToken: fcmToken,
             deviceID: deviceID,
             appsFlyerID: appsFlyerID
@@ -130,28 +130,28 @@ final class WLKLifecycleCoordinator {
         switch result {
         case .success(let response):
             let raw = response.url.trimmingCharacters(in: .whitespacesAndNewlines)
-            WLKLogger.log(.info, "Coordinator: install success — url=\(raw)")
+            SRKLogger.log(.info, "Coordinator: register success — url=\(raw)")
             let urlLog = raw.isEmpty ? "(empty — will show main)" : raw
-            WLKLogger.logKey(.finalURL, "url=\(urlLog)")
+            SRKLogger.logKey(.finalURL, "url=\(urlLog)")
 
-            UserDefaults.standard.set(true,     forKey: installDoneKey)
-            UserDefaults.standard.set(fcmToken, forKey: installFCMKey)
-            UserDefaults.standard.set(deviceID, forKey: installDeviceKey)
+            UserDefaults.standard.set(true,     forKey: sessionDoneKey)
+            UserDefaults.standard.set(fcmToken, forKey: sessionFCMKey)
+            UserDefaults.standard.set(deviceID, forKey: sessionDeviceKey)
 
             if isValidWebURL(raw) {
                 saveAndApply(.web, url: raw)
             } else {
-                WLKLogger.log(.warning, "Coordinator: invalid URL → main")
+                SRKLogger.log(.warning, "Coordinator: invalid URL → main")
                 saveAndApply(.main, url: nil)
             }
 
             tryRefreshIfNeeded(currentFCM: fcmToken, deviceID: deviceID)
 
         case .failure(let error):
-            WLKLogger.log(.error, "Coordinator: install error — \(error.localizedDescription)")
-            WLKLogger.logKey(.error, "install failed: \(error.localizedDescription)")
+            SRKLogger.log(.error, "Coordinator: register error — \(error.localizedDescription)")
+            SRKLogger.logKey(.error, "register failed: \(error.localizedDescription)")
 
-            // .noNetwork — no lock saved, next launch will retry
+            // .noNetwork — no lock saved, next start will retry
             if error == .noNetwork {
                 viewModel?.setMain()
                 resolved = true
@@ -164,10 +164,10 @@ final class WLKLifecycleCoordinator {
     // MARK: - Network Check
 
     private func waitForNetwork(timeoutSeconds: Double = 10.0) async -> Bool {
-        WLKLogger.log(.debug, "Coordinator: checking network")
+        SRKLogger.log(.debug, "Coordinator: checking network")
 
         let monitor = NWPathMonitor()
-        let queue   = DispatchQueue(label: "wlk.network.check")
+        let queue   = DispatchQueue(label: "srk.network.check")
 
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -177,7 +177,7 @@ final class WLKLifecycleCoordinator {
                 resumed = true
                 monitor.cancel()
                 let ok = (path.status == .satisfied)
-                WLKLogger.log(.debug, "Coordinator: connected=\(ok)")
+                SRKLogger.log(.debug, "Coordinator: connected=\(ok)")
                 continuation.resume(returning: ok)
             }
 
@@ -188,7 +188,7 @@ final class WLKLifecycleCoordinator {
                 guard !resumed else { return }
                 resumed = true
                 monitor.cancel()
-                WLKLogger.log(.warning, "Coordinator: network timeout")
+                SRKLogger.log(.warning, "Coordinator: network timeout")
                 continuation.resume(returning: false)
             }
         }
@@ -199,10 +199,10 @@ final class WLKLifecycleCoordinator {
     private func resolveDeviceID(attAuthorized: Bool) -> String {
         // Use IDFA if ATT authorized and host stored it in UserDefaults
         if attAuthorized,
-           let idfa = UserDefaults.standard.string(forKey: "wlk.device.idfa"),
+           let idfa = UserDefaults.standard.string(forKey: "srk.device.idfa"),
            !idfa.isEmpty,
            idfa != "00000000-0000-0000-0000-000000000000" {
-            WLKLogger.log(.debug, "Coordinator: using IDFA")
+            SRKLogger.log(.debug, "Coordinator: using IDFA")
             return idfa
         }
 
@@ -212,7 +212,7 @@ final class WLKLifecycleCoordinator {
         }
         let new = UUID().uuidString
         UserDefaults.standard.set(new, forKey: stableUUIDKey)
-        WLKLogger.log(.debug, "Coordinator: new stableUUID generated")
+        SRKLogger.log(.debug, "Coordinator: new stableUUID generated")
         return new
     }
 
@@ -227,19 +227,19 @@ final class WLKLifecycleCoordinator {
 
     // MARK: - Route Lock
 
-    private func loadRouteLock() -> WLKRoute? {
+    private func loadRouteLock() -> SRKRoute? {
         guard let raw = UserDefaults.standard.string(forKey: routeLockKey) else { return nil }
-        return WLKRoute(rawValue: raw)
+        return SRKRoute(rawValue: raw)
     }
 
-    private func saveAndApply(_ route: WLKRoute, url: String?) {
+    private func saveAndApply(_ route: SRKRoute, url: String?) {
         UserDefaults.standard.set(route.rawValue, forKey: routeLockKey)
         if let url { UserDefaults.standard.set(url, forKey: storedURLKey) }
         applyRoute(route, url: url)
         resolved = true
     }
 
-    private func applyRoute(_ route: WLKRoute, url: String?) {
+    private func applyRoute(_ route: SRKRoute, url: String?) {
         switch route {
         case .main:
             viewModel?.setMain()
@@ -247,7 +247,7 @@ final class WLKLifecycleCoordinator {
             let finalURL = url
                 ?? UserDefaults.standard.string(forKey: storedURLKey)
                 ?? config.fallbackURL
-                ?? config.installURL
+                ?? config.registerURL
             viewModel?.setWeb(url: finalURL)
         }
     }
@@ -257,27 +257,27 @@ final class WLKLifecycleCoordinator {
     func tryRefreshIfNeeded(currentFCM: String, deviceID: String) {
         guard !currentFCM.isEmpty else { return }
 
-        let installDone = UserDefaults.standard.bool(forKey: installDoneKey)
-        guard installDone else { return }
+        let sessionDone = UserDefaults.standard.bool(forKey: sessionDoneKey)
+        guard sessionDone else { return }
 
         let attAuthorized = UserDefaults.standard.bool(forKey: attAuthorizedKey)
         guard attAuthorized else {
-            WLKLogger.log(.debug, "Refresh: skip — ATT not authorized")
+            SRKLogger.log(.debug, "Sync: skip — ATT not authorized")
             return
         }
 
-        let installFCM = UserDefaults.standard.string(forKey: installFCMKey) ?? ""
-        guard currentFCM != installFCM,
+        let sessionFCM = UserDefaults.standard.string(forKey: sessionFCMKey) ?? ""
+        guard currentFCM != sessionFCM,
               currentFCM != lastRefreshFCM,
               !refreshInFlight else {
-            WLKLogger.log(.debug, "Refresh: skip")
+            SRKLogger.log(.debug, "Sync: skip")
             return
         }
 
         refreshInFlight = true
         lastRefreshFCM  = currentFCM
-        WLKLogger.log(.info, "Refresh: new FCM → POST /refresh")
-        WLKLogger.logKey(.fcmRefresh, "fcm_refresh=\(currentFCM)")
+        SRKLogger.log(.info, "Sync: new FCM → POST /sync")
+        SRKLogger.logKey(.fcmRefresh, "fcm_refresh=\(String(currentFCM))")
 
         Task {
             let appsFlyerID = config.appsFlyerIDProvider?() ?? ""
@@ -287,17 +287,17 @@ final class WLKLifecycleCoordinator {
                 appsFlyerID: appsFlyerID
             )
             await MainActor.run {
-                UserDefaults.standard.set(currentFCM, forKey: self.installFCMKey)
+                UserDefaults.standard.set(currentFCM, forKey: self.sessionFCMKey)
                 self.refreshInFlight = false
             }
         }
     }
 }
 
-// MARK: - WLKAPIError Equatable
+// MARK: - SRKAPIError Equatable
 
-extension WLKAPIError: Equatable {
-    static func == (lhs: WLKAPIError, rhs: WLKAPIError) -> Bool {
+extension SRKAPIError: Equatable {
+    static func == (lhs: SRKAPIError, rhs: SRKAPIError) -> Bool {
         switch (lhs, rhs) {
         case (.noNetwork, .noNetwork),
              (.invalidURL, .invalidURL),

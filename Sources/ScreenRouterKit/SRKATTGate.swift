@@ -1,13 +1,13 @@
-// WLKATTGate.swift
+// SRKATTGate.swift
 // ScreenRouterKit
 
 import AppTrackingTransparency
 
-final class WLKATTGate: Sendable {
+final class SRKATTGate: Sendable {
 
-    private let handling: WLKATTHandling
+    private let handling: SRKATTHandling
 
-    init(handling: WLKATTHandling) {
+    init(handling: SRKATTHandling) {
         self.handling = handling
     }
 
@@ -17,17 +17,17 @@ final class WLKATTGate: Sendable {
         switch handling {
 
         case .skip:
-            WLKLogger.log(.debug, "ATT: skip")
+            SRKLogger.log(.debug, "ATT: skip")
             return false
 
         case .managedByHost(let signal):
-            WLKLogger.log(.debug, "ATT: waiting for host signal...")
+            SRKLogger.log(.debug, "ATT: waiting for host signal...")
             let authorized = await signal.wait()
-            WLKLogger.log(.info, "ATT: host signaled — authorized=\(authorized)")
+            SRKLogger.log(.info, "ATT: host signaled — authorized=\(authorized)")
             return authorized
 
         case .managedByLibrary:
-            WLKLogger.log(.debug, "ATT: requesting via library")
+            SRKLogger.log(.debug, "ATT: requesting via library")
 
             let status = await MainActor.run {
                 ATTrackingManager.trackingAuthorizationStatus
@@ -36,14 +36,14 @@ final class WLKATTGate: Sendable {
             // Already determined — skip showing the alert again
             if status != .notDetermined {
                 let authorized = (status == .authorized)
-                WLKLogger.log(.info, "ATT: already determined — authorized=\(authorized)")
+                SRKLogger.log(.info, "ATT: already determined — authorized=\(authorized)")
                 return authorized
             }
 
             return await withCheckedContinuation { continuation in
                 ATTrackingManager.requestTrackingAuthorization { status in
                     let authorized = (status == .authorized)
-                    WLKLogger.log(.info, "ATT: response — authorized=\(authorized)")
+                    SRKLogger.log(.info, "ATT: response — authorized=\(authorized)")
                     continuation.resume(returning: authorized)
                 }
             }

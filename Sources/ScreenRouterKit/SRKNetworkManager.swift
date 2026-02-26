@@ -1,18 +1,17 @@
-// WLKNetworkManager.swift
+// SRKNetworkManager.swift
 // ScreenRouterKit
-
 
 import Foundation
 
 // MARK: - Response
 
-struct WLKInstallResponse: Decodable {
+struct SRKSessionResponse: Decodable {
     let url: String
 }
 
 // MARK: - Errors
 
-enum WLKAPIError: LocalizedError {
+enum SRKAPIError: LocalizedError {
     case invalidURL
     case invalidResponse
     case serverError(Int)
@@ -34,24 +33,24 @@ enum WLKAPIError: LocalizedError {
 
 // MARK: - Network Manager
 
-final class WLKNetworkManager: Sendable {
+final class SRKNetworkManager: Sendable {
 
-    private let config: WLKConfiguration
+    private let config: SRKConfiguration
 
-    init(config: WLKConfiguration) {
+    init(config: SRKConfiguration) {
         self.config = config
     }
 
     // MARK: - Install
 
-    func fetchInstall(
+    func fetchRegister(
         fcmToken: String,
         deviceID: String,
         appsFlyerID: String  // empty string for variant A
-    ) async -> Result<WLKInstallResponse, WLKAPIError> {
+    ) async -> Result<SRKSessionResponse, SRKAPIError> {
 
-        guard let url = URL(string: config.installURL) else {
-            WLKLogger.log(.error, "Install: invalid installURL")
+        guard let url = URL(string: config.registerURL) else {
+            SRKLogger.log(.error, "Register: invalid registerURL")
             return .failure(.invalidURL)
         }
 
@@ -66,8 +65,8 @@ final class WLKNetworkManager: Sendable {
             body["appsFlyerId"] = appsFlyerID
         }
 
-        WLKLogger.log(.network, "Install: POST \(config.installURL)")
-        WLKLogger.log(.network, "Install: bundle=\(config.bundleID) device=\(deviceID)... fcm=\(fcmToken)... af=\(appsFlyerID.isEmpty ? "none" : String(appsFlyerID))")
+        SRKLogger.log(.network, "Register: POST \(config.registerURL)")
+        SRKLogger.log(.network, "Register: bundle=\(config.bundleID) device=\(deviceID) fcm=\(fcmToken) af=\(appsFlyerID.isEmpty ? "none" : String(appsFlyerID))")
 
         return await performRequest(url: url, body: body, tag: "Install")
     }
@@ -80,8 +79,8 @@ final class WLKNetworkManager: Sendable {
         appsFlyerID: String
     ) async {
 
-        guard let url = URL(string: config.refreshURL) else {
-            WLKLogger.log(.error, "Refresh: invalid refreshURL")
+        guard let url = URL(string: config.syncURL) else {
+            SRKLogger.log(.error, "Sync: invalid syncURL")
             return
         }
 
@@ -95,17 +94,17 @@ final class WLKNetworkManager: Sendable {
             body["appsFlyerId"] = appsFlyerID
         }
 
-        WLKLogger.log(.network, "Refresh: POST \(config.refreshURL)")
+        SRKLogger.log(.network, "Sync: POST \(config.syncURL)")
 
-        let result: Result<WLKInstallResponse, WLKAPIError> = await performRequest(
+        let result: Result<SRKSessionResponse, SRKAPIError> = await performRequest(
             url: url, body: body, tag: "Refresh"
         )
 
         switch result {
         case .success:
-            WLKLogger.log(.info, "Refresh: success")
+            SRKLogger.log(.info, "Sync: success")
         case .failure(let error):
-            WLKLogger.log(.error, "Refresh: error — \(error.localizedDescription)")
+            SRKLogger.log(.error, "Sync: error — \(error.localizedDescription)")
         }
     }
 
@@ -115,7 +114,7 @@ final class WLKNetworkManager: Sendable {
         url: URL,
         body: [String: String],
         tag: String
-    ) async -> Result<T, WLKAPIError> {
+    ) async -> Result<T, SRKAPIError> {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -135,10 +134,10 @@ final class WLKNetworkManager: Sendable {
                 return .failure(.invalidResponse)
             }
 
-            WLKLogger.log(.network, "\(tag): status \(http.statusCode)")
+            SRKLogger.log(.network, "\(tag): status \(http.statusCode)")
 
             if let text = String(data: data, encoding: .utf8) {
-                WLKLogger.log(.network, "\(tag): response — \(text)")
+                SRKLogger.log(.network, "\(tag): response — \(text)")
             }
 
             guard (200...299).contains(http.statusCode) else {
@@ -147,7 +146,7 @@ final class WLKNetworkManager: Sendable {
 
             // 204 No Content or empty body — valid success with no URL → show main
             if http.statusCode == 204 || data.isEmpty {
-                WLKLogger.log(.info, "\(tag): 204 / empty body → main")
+                SRKLogger.log(.info, "\(tag): 204 / empty body → main")
                 let emptyJSON = Data("{\"url\":\"\"}".utf8)
                 if let result = try? JSONDecoder().decode(T.self, from: emptyJSON) {
                     return .success(result)
@@ -157,7 +156,7 @@ final class WLKNetworkManager: Sendable {
             do {
                 return .success(try JSONDecoder().decode(T.self, from: data))
             } catch {
-                WLKLogger.log(.error, "\(tag): decoding error — \(error)")
+                SRKLogger.log(.error, "\(tag): decoding error — \(error)")
                 return .failure(.decodingError)
             }
 

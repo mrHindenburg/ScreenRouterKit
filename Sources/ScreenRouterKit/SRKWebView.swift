@@ -1,4 +1,4 @@
-// WLKWebView.swift
+// SRKWebView.swift
 // ScreenRouterKit
 
 import SwiftUI
@@ -7,10 +7,10 @@ import Combine
 
 // MARK: - WKWebView UIViewRepresentable
 
-struct WLKWebView: UIViewRepresentable {
+struct SRKWebView: UIViewRepresentable {
 
     let urlString: String
-    @ObservedObject var navState: WLKNavigationState
+    @ObservedObject var navState: SRKNavigationState
 
     // MARK: - Make
 
@@ -37,9 +37,9 @@ struct WLKWebView: UIViewRepresentable {
             context.coordinator.homeRequest = request
             navState.homeRequest = request
             webView.load(request)
-            WLKLogger.log(.debug, "WebView: load \(urlString)")
+            SRKLogger.log(.debug, "WebView: load \(urlString)")
         } else {
-            WLKLogger.log(.error, "WebView: invalid URL — \(urlString)")
+            SRKLogger.log(.error, "WebView: invalid URL — \(urlString)")
         }
 
         return webView
@@ -104,14 +104,14 @@ struct WLKWebView: UIViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
-        var parent: WLKWebView
+        var parent: SRKWebView
         var cancellables = Set<AnyCancellable>()
         var homeRequest: URLRequest?
 
         // Skip spinner on back/forward — it looks odd
         private var suppressSpinner = false
 
-        init(_ parent: WLKWebView) {
+        init(_ parent: SRKWebView) {
             self.parent = parent
         }
 
@@ -190,7 +190,7 @@ struct WLKWebView: UIViewRepresentable {
                 }
             }
             updateNavButtons(webView)
-            WLKLogger.log(.debug, "WebView: didStart — \(webView.url?.absoluteString ?? "")")
+            SRKLogger.log(.debug, "WebView: didStart — \(webView.url?.absoluteString ?? "")")
         }
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
@@ -204,7 +204,7 @@ struct WLKWebView: UIViewRepresentable {
             }
             suppressSpinner = false
             updateNavButtons(webView)
-            WLKLogger.log(.debug, "WebView: didFinish — \(webView.url?.absoluteString ?? "")")
+            SRKLogger.log(.debug, "WebView: didFinish — \(webView.url?.absoluteString ?? "")")
         }
 
         func webView(_ webView: WKWebView,
@@ -220,7 +220,7 @@ struct WLKWebView: UIViewRepresentable {
         }
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-            WLKLogger.log(.warning, "WebView: process terminated — reload")
+            SRKLogger.log(.warning, "WebView: process terminated — reload")
             if webView.url != nil { webView.reload() }
         }
 
@@ -251,7 +251,7 @@ struct WLKWebView: UIViewRepresentable {
             if let failURL = ns.userInfo[NSURLErrorFailingURLErrorKey] as? URL,
                failURL.host?.contains("onesignal.com") == true { return }
 
-            WLKLogger.log(.error, "WebView: error — \(error.localizedDescription)")
+            SRKLogger.log(.error, "WebView: error — \(error.localizedDescription)")
 
             DispatchQueue.main.async {
                 self.parent.navState.isLoading = false

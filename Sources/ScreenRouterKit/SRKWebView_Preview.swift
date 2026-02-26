@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Preview Wrapper
 
-struct WLKWebView_Preview: View {
+struct SRKWebView_Preview: View {
 
     @State private var selectedURL = PreviewURL.google
     @State private var id = UUID()
@@ -23,7 +23,7 @@ struct WLKWebView_Preview: View {
 
             Divider()
 
-            WLKWebContainerView(url: selectedURL.rawValue)
+            SRKWebContainerView(url: selectedURL.rawValue)
                 .id(id)
         }
         .onChange(of: selectedURL) { _ in
@@ -57,7 +57,7 @@ enum PreviewURL: String, CaseIterable, Identifiable {
 
 struct WLKNavigationDebugView: View {
 
-    @StateObject private var navState = WLKNavigationState()
+    @StateObject private var navState = SRKNavigationState()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -85,7 +85,7 @@ struct WLKNavigationDebugView: View {
             Divider()
 
             // WebView
-            WLKWebView(urlString: "https://google.com", navState: navState)
+            SRKWebView(urlString: "https://google.com", navState: navState)
                 .ignoresSafeArea(edges: .bottom)
 
             HStack(spacing: 32) {
@@ -124,7 +124,7 @@ struct WLKNavigationDebugView: View {
 // MARK: - Previews
 
 #Preview("WebView + Navigation Toolbar") {
-    WLKWebView_Preview()
+    SRKWebView_Preview()
 }
 
 #Preview("Navigation State Debug") {
@@ -133,9 +133,9 @@ struct WLKNavigationDebugView: View {
 
 #Preview("WebView — Google OAuth flow") {
     // Tests that Google sign-in stays inside WebView (not Safari)
-    WLKWebContainerView(url: "https://accounts.google.com")
+    SRKWebContainerView(url: "https://accounts.google.com")
 }
 
 #Preview("WebView — YouTube") {
-    WLKWebContainerView(url: "https://youtube.com")
+    SRKWebContainerView(url: "https://youtube.com")
 }
