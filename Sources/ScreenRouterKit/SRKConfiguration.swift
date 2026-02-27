@@ -157,6 +157,7 @@ public struct SRKConfiguration: @unchecked Sendable {
     public init(
         splash:   @escaping SRKSplashProviderSimple,
         debugMode: SRKDebugMode = .disabled,
+        attHandling: SRKATTHandling = .managedByLibrary,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) {
@@ -164,7 +165,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.registerURL            = ""
         self.syncURL            = ""
         self.bundleID              = ""
-        self.attHandling           = .skip
+        self.attHandling           = attHandling
         self.appsFlyerIDProvider   = nil
         self.pushEnabled           = false
         self.fallbackURL           = nil

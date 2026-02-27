@@ -87,6 +87,7 @@ public final class ScreenRouterKit {
         splash: @escaping SRKSplashProviderSimple,
         mainView: @escaping SRKMainViewProvider,
         debugMode: SRKDebugMode = .disabled,
+        attHandling: SRKATTHandling = .managedByLibrary,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
@@ -97,6 +98,7 @@ public final class ScreenRouterKit {
         let config = SRKConfiguration(
             splash:              splash,
             debugMode:           debugMode,
+            attHandling:         attHandling,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations
         )
@@ -274,14 +276,22 @@ public final class ScreenRouterKit {
 
 
     func startSimple() {
-        guard let config, !started else { return }
-        started = true
-        SRKLogger.mode = config.debugMode
-        SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
-        // Immediately set .main — RootView shows mainView under splash
-        // Splash will fade out when SplashView calls onComplete()
-        viewModel?.setMain()
-    }
+            guard let config, !started else { return }
+            started = true
+            SRKLogger.mode = config.debugMode
+            SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
+
+            Task { @MainActor in
+                // Run ATT if configured — skip does nothing
+                let attGate = SRKATTGate(handling: config.attHandling)
+                let attAuthorized = await attGate.requestIfNeeded()
+                UserDefaults.standard.set(attAuthorized, forKey: "srk.att.authorized")
+                SRKLogger.log(.info, "ScreenRouterKit: startSimple — ATT authorized=\(attAuthorized)")
+
+                // Splash will fade out when SplashView calls onComplete()
+                viewModel?.setMain()
+            }
+        }
 
     // MARK: - Token Handlers
 
