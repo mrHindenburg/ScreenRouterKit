@@ -157,7 +157,7 @@ public struct SRKConfiguration: @unchecked Sendable {
     public init(
         splash:   @escaping SRKSplashProviderSimple,
         debugMode: SRKDebugMode = .disabled,
-        attHandling: SRKATTHandling = .managedByLibrary,
+        attHandling: SRKATTHandling,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) {

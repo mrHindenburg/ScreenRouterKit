@@ -86,8 +86,8 @@ public final class ScreenRouterKit {
         transition: SRKTransitionConfig = .fade,
         splash: @escaping SRKSplashProviderSimple,
         mainView: @escaping SRKMainViewProvider,
-        attHandling: SRKATTHandling = .managedByLibrary,
         debugMode: SRKDebugMode = .disabled,
+        attHandling: SRKATTHandling,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
