@@ -83,11 +83,11 @@ public final class ScreenRouterKit {
     /// }
     /// ```
     public func present(
+        transition: SRKTransitionConfig = .fade,
         splash: @escaping SRKSplashProviderSimple,
         mainView: @escaping SRKMainViewProvider,
-        transition: SRKTransitionConfig = .fade,
+        attHandling: SRKATTHandling = .managedByLibrary,
         debugMode: SRKDebugMode = .disabled,
-        attHandling: SRKATTHandling,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
