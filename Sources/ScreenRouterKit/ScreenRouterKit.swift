@@ -84,7 +84,7 @@ public final class ScreenRouterKit {
     /// ```
     public func present(
         transition: SRKTransitionConfig = .fade,
-        splash: @escaping SRKSplashProviderSimple,
+        splash: @escaping SRKSplashProvider,
         mainView: @escaping SRKMainViewProvider,
         debugMode: SRKDebugMode = .disabled,
         attHandling: SRKATTHandling,

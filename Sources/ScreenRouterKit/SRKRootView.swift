@@ -3,6 +3,49 @@
 
 import SwiftUI
 
+// MARK: - Ready Gate
+
+/// Waits for BOTH conditions before dismissing splash:
+///   1. Pipeline resolved (vm.presented changed to .main or .web)
+///   2. SplashView called onComplete() — animation finished
+///
+/// Whichever happens first — waits for the other.
+/// Guarantees splash is never cut short even if server responds instantly.
+
+final class SRKReadyGate {
+
+    private var pipelineDone  = false
+    private var splashDone    = false
+    private var dismissAction: (() -> Void)?
+
+    /// Call when routing pipeline finishes.
+    func pipelineReady(dismiss: @escaping () -> Void) {
+        DispatchQueue.main.async {
+            self.pipelineDone  = true
+            self.dismissAction = dismiss
+            self.tryDismiss()
+        }
+    }
+
+    /// Call when SplashView's onComplete() fires.
+    func splashReady() {
+        splashDone = true
+        tryDismiss()
+    }
+
+    private func tryDismiss() {
+        guard pipelineDone, splashDone else { return }
+        dismissAction?()
+        dismissAction = nil
+    }
+
+    func reset() {
+        pipelineDone  = false
+        splashDone    = false
+        dismissAction = nil
+    }
+}
+
 // MARK: - Root View
 
 public struct SRKRootView: View {
@@ -13,6 +56,9 @@ public struct SRKRootView: View {
     @State private var splashOffset:  CGSize  = .zero
     @State private var splashScale:   CGFloat = 1
     @State private var splashVisible: Bool    = true
+
+    // ReadyGate lives here — one per RootView lifecycle
+    @StateObject private var gate = ReadyGateHolder()
 
     public init() {}
 
@@ -32,18 +78,16 @@ public struct SRKRootView: View {
             }
         }
         .onChange(of: vm.presented) { newState in
-            let isSimpleMode = ScreenRouterKit.shared.config?.splashProviderSimple != nil
-
             switch newState {
             case .main, .web:
-                if !isSimpleMode {
-                    fadeOutSplash()
-                }
+                // Pipeline done — gate dismisses when splash also calls onComplete()
+                gate.value.pipelineReady(dismiss: fadeOutSplash)
             case .loading:
                 splashOpacity = 1
                 splashOffset  = .zero
                 splashScale   = 1
                 splashVisible = true
+                gate.value.reset()
             }
         }
     }
@@ -52,18 +96,14 @@ public struct SRKRootView: View {
 
     @ViewBuilder
     private var splashLayer: some View {
-        let kit = ScreenRouterKit.shared
-
-        if let splashSimple = kit.config?.splashProviderSimple {
-            // Simple mode — SplashView calls onComplete() when animation finishes
-            splashSimple {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    fadeOutSplash()
-                }
+        if let splash = ScreenRouterKit.shared.config?.splashProvider {
+            // Same SplashView for ALL modes.
+            // onComplete() → gate.splashReady() → dismiss when pipeline also done.
+            // In simple mode: pipeline resolves instantly → dismiss fires when splash calls onComplete().
+            // In full mode:   if server is fast → waits for splash; if splash is fast → waits for server.
+            splash {
+                gate.value.splashReady()
             }
-        } else if let splash = kit.config?.splashProvider {
-            // Full mode — library dismisses splash when pipeline resolves
-            splash()
         } else {
             Color(.systemBackground)
         }
@@ -124,20 +164,18 @@ public struct SRKRootView: View {
             }
         }
 
-        // Remove from hierarchy after animation completes
-        let duration = animationDuration(config.animation)
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
             splashVisible = false
         }
     }
+}
 
-    /// Extracts approximate duration from Animation for cleanup timing.
-    private func animationDuration(_ animation: Animation) -> Double {
-        // SwiftUI Animation doesn't expose duration directly —
-        // we use a reasonable fallback that covers most cases.
-        // Host can tune via SRKTransitionConfig.animation.
-        return 0.7
-    }
+// MARK: - ReadyGate Holder
+
+/// Wraps SRKReadyGate in ObservableObject so @StateObject keeps it alive
+/// for the full lifetime of SRKRootView.
+private final class ReadyGateHolder: ObservableObject {
+    let value = SRKReadyGate()
 }
 
 // MARK: - Orientation Proxy
