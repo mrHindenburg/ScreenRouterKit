@@ -11,7 +11,7 @@ import SwiftUI
 ///
 /// Whichever happens first — waits for the other.
 /// Guarantees splash is never cut short even if server responds instantly.
-
+/// Must be used only on MainActor.
 final class SRKReadyGate {
 
     private var pipelineDone  = false
@@ -20,11 +20,9 @@ final class SRKReadyGate {
 
     /// Call when routing pipeline finishes.
     func pipelineReady(dismiss: @escaping () -> Void) {
-        DispatchQueue.main.async {
-            self.pipelineDone  = true
-            self.dismissAction = dismiss
-            self.tryDismiss()
-        }
+        pipelineDone  = true
+        dismissAction = dismiss
+        tryDismiss()
     }
 
     /// Call when SplashView's onComplete() fires.
@@ -174,6 +172,7 @@ public struct SRKRootView: View {
 
 /// Wraps SRKReadyGate in ObservableObject so @StateObject keeps it alive
 /// for the full lifetime of SRKRootView.
+@MainActor
 private final class ReadyGateHolder: ObservableObject {
     let value = SRKReadyGate()
 }

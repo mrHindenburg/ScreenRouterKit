@@ -71,7 +71,7 @@ public final class ScreenRouterKit {
     // MARK: SIMPLE — splash only, no networking
     // MARK: ─────────────────────────────────────────────────────────────────
 
-    /// Simple entry point — no API, no ATT, no push.
+    /// Simple entry point — no API, no push, Att rudimentary.
     /// Library shows splash, waits for onComplete() callback, then fades to mainView.
     ///
     /// ```swift
@@ -119,7 +119,7 @@ public final class ScreenRouterKit {
     // MARK: ─────────────────────────────────────────────────────────────────
 
     /// Single entry point for variant A.
-    /// Returns a self-contained View that switches between splash / WebView / mainView.
+    /// Returns a self-contained View that switches between splash / WebView / mainView. Att handled by library always.
     ///
     /// ```swift
     /// WindowGroup {
@@ -127,7 +127,7 @@ public final class ScreenRouterKit {
     ///         registerURL: "https://your-domain.com/v1/public/register",
     ///         syncURL: "https://your-domain.com/v1/public/sync",
     ///         bundleID:   "6759095589",
-    ///         splash:     { AnyView(SplashView()) },
+    ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
     ///         mainView:   { AnyView(ContentView()) }
     ///     )
     /// }
@@ -174,7 +174,7 @@ public final class ScreenRouterKit {
     // MARK: ─────────────────────────────────────────────────────────────────
 
     /// Single entry point for variant B.
-    /// Identical interface to start() — host sees no difference.
+    /// Identical interface to start() — host sees no difference. Don' t forget AppDelegate ! )
     ///
     /// ```swift
     /// WindowGroup {
