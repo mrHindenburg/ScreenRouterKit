@@ -16,7 +16,7 @@ final class SRKPushGate: Sendable {
     private let enabled: Bool
 
     // Thread-safe token storage
-    private let _fcmToken  = TokenBox()
+    private let _fcmToken = TokenBox()
     private let _srk_apnsToken = TokenBox()
 
     var fcmToken: String? {
@@ -36,8 +36,8 @@ final class SRKPushGate: Sendable {
     // MARK: - Request Permission
 
     /// Requests push notification permission (if pushEnabled = true).
-    /// Then waits for the FCM token with a timeout.
-    /// Always returns — either a token or nil after timeout.
+    /// Then waits for a stable FCM token with debounce logic.
+    /// Always returns — either a stable token or nil after timeout.
     func requestAndCollect() async -> String? {
         if enabled {
             await requestPermission()
@@ -50,8 +50,8 @@ final class SRKPushGate: Sendable {
             UIApplication.shared.registerForRemoteNotifications()
         }
 
-        // Wait for FCM token
-        return await waitForFCMToken()
+        // Wait for stable FCM token
+        return await waitForStableFCMToken()
     }
 
     // MARK: - Private
@@ -60,7 +60,6 @@ final class SRKPushGate: Sendable {
         let center = UNUserNotificationCenter.current()
         let current = await center.notificationSettings()
 
-        // Already answered — do not show the alert again
         guard current.authorizationStatus == .notDetermined else {
             SRKLogger.log(.debug, "Push: already authorized — status=\(current.authorizationStatus.rawValue)")
             return
@@ -74,36 +73,101 @@ final class SRKPushGate: Sendable {
         }
     }
 
-    private func waitForFCMToken(timeoutSeconds: Double = 6.0) async -> String? {
-        SRKLogger.log(.debug, "Push: waiting for FCM token (timeout=\(timeoutSeconds)s)")
+    /// Waits for a stable FCM token using debounce logic.
+    /// - Waits at least `minWindowSeconds` after the first token arrives
+    /// - Accepts token only after it hasn't changed for `debounceSeconds`
+    /// - Falls back to cached token after `maxWindowSeconds`
+    private func waitForStableFCMToken(
+        minWindowSeconds: Double = 4.0,
+        debounceSeconds:  Double = 1.2,
+        maxWindowSeconds: Double = 8.0
+    ) async -> String? {
 
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        SRKLogger.log(.debug, "Push: waiting for stable FCM token (min=\(minWindowSeconds)s, debounce=\(debounceSeconds)s, max=\(maxWindowSeconds)s)")
 
-        while Date() < deadline {
-            // Check in-memory first (updated from AppDelegate)
-            if let token = fcmToken, !token.isEmpty {
-                SRKLogger.log(.info, "Push: FCM token received")
-                return token
-            }
+        let start    = Date()
+        let deadline = start.addingTimeInterval(maxWindowSeconds)
 
-            // Fallback — UserDefaults (may have been saved by AppDelegate earlier)
-            if let stored = UserDefaults.standard.string(forKey: "srk.fcm.token"), !stored.isEmpty {
-                SRKLogger.log(.debug, "Push: FCM token from UserDefaults")
-                fcmToken = stored
-                return stored
-            }
+        var latestToken: String? = nil
+        var lastChange:  Date   = .distantPast
 
-            try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+        // ── Seed from shared/UserDefaults if already available ────────────
+        if let existing = SRKPushGate.shared.fcmToken, !existing.isEmpty {
+            latestToken = existing
+            lastChange  = Date()
+            SRKLogger.log(.debug, "Push: seeded token from shared: \(existing)")
+        } else if let stored = UserDefaults.standard.string(forKey: "srk.fcm.token"), !stored.isEmpty {
+            latestToken = stored
+            lastChange  = Date()
+            SRKLogger.log(.debug, "Push: seeded token from UserDefaults")
         }
 
-        // Last chance after timeout
-        let fallback = UserDefaults.standard.string(forKey: "srk.fcm.token")
+        // ── Wait for first token if not seeded ────────────────────────────
+        while latestToken == nil || latestToken!.isEmpty {
+            if Date() > deadline { break }
+
+            if let t = SRKPushGate.shared.fcmToken, !t.isEmpty {
+                latestToken = t
+                lastChange  = Date()
+                SRKLogger.log(.debug, "Push: first token captured from shared")
+                break
+            }
+
+            if let t = UserDefaults.standard.string(forKey: "srk.fcm.token"), !t.isEmpty {
+                latestToken = t
+                lastChange  = Date()
+                SRKLogger.log(.debug, "Push: first token captured from UserDefaults")
+                break
+            }
+
+            try? await Task.sleep(nanoseconds: 120_000_000)
+        }
+
+        guard let _ = latestToken else {
+            SRKLogger.log(.warning, "Push: no FCM token received — sending empty")
+            return nil
+        }
+
+        let firstTokenTime = Date()
+        SRKLogger.log(.debug, "Push: first token captured — starting stability window")
+
+        // ── Stability loop ────────────────────────────────────────────────
+        while Date() < deadline {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+
+            // Check for newer token
+            let current = SRKPushGate.shared.fcmToken
+                ?? UserDefaults.standard.string(forKey: "srk.fcm.token")
+
+            if let current, !current.isEmpty, current != latestToken {
+                SRKLogger.log(.debug, "Push: FCM changed: \(latestToken ?? "nil") → \(current)")
+                latestToken = current
+                lastChange  = Date()
+            }
+
+            let sinceFirst  = Date().timeIntervalSince(firstTokenTime)
+            let sinceChange = Date().timeIntervalSince(lastChange)
+
+            // Must wait minimum window AND token must be stable
+            if sinceFirst >= minWindowSeconds,
+               let tok = latestToken, !tok.isEmpty,
+               sinceChange >= debounceSeconds {
+                SRKLogger.log(.info, "Push: stable FCM token accepted (sinceFirst=\(String(format: "%.1f", sinceFirst))s, sinceChange=\(String(format: "%.1f", sinceChange))s)")
+                return tok
+            }
+        }
+
+        // ── Timeout fallback ──────────────────────────────────────────────
+        let fallback = latestToken
+            ?? SRKPushGate.shared.fcmToken
+            ?? UserDefaults.standard.string(forKey: "srk.fcm.token")
+
         if let fallback, !fallback.isEmpty {
-            SRKLogger.log(.warning, "Push: FCM token from fallback after timeout")
+            SRKLogger.log(.warning, "Push: stability timeout — using best available token")
             return fallback
         }
 
-        SRKLogger.log(.warning, "Push: FCM token not received within \(timeoutSeconds)s — sending empty")
+        SRKLogger.log(.warning, "Push: FCM token not received within \(maxWindowSeconds)s — sending empty")
         return nil
     }
 }

@@ -85,19 +85,19 @@ final class SRKFlowCoordinator {
             return
         }
 
-        // ── 2. ATT ────────────────────────────────────────────────────────
-        // Variant A: library shows the ATT alert itself
-        // Variant B: library waits for signal.complete() from host
-        //            (host calls AppsFlyerLib.shared().start() between ATT and this point)
-        SRKLogger.log(.debug, "Coordinator: step 2 — ATT")
-        let attAuthorized = await attGate.requestIfNeeded()
+        // ── 2+3. ATT and Push — run in parallel ───────────────────────────
+        SRKLogger.log(.debug, "Coordinator: step 2+3 — ATT + Push (parallel)")
+
+        async let attTask   = attGate.requestIfNeeded()
+        async let pushTask  = pushGate.requestAndCollect()
+
+        let (attAuthorized, fcmTokenOpt) = await (attTask, pushTask)
+        let fcmToken = fcmTokenOpt ?? ""
+
         UserDefaults.standard.set(attAuthorized, forKey: attAuthorizedKey)
         SRKLogger.log(.info, "Coordinator: ATT authorized=\(attAuthorized)")
 
-        // ── 3. Push + FCM ────────────────────────────────────────────────
-        SRKLogger.log(.debug, "Coordinator: step 3 — Push + FCM")
-        let fcmToken = await pushGate.requestAndCollect() ?? ""
-        let fcmLog = fcmToken.isEmpty ? "(empty)" : String(fcmToken)
+        let fcmLog = fcmToken.isEmpty ? "(empty)" : fcmToken
         SRKLogger.logKey(.fcmFirst, "fcm=\(fcmLog)")
 
         // ── 4. Device ID ─────────────────────────────────────────────────
@@ -106,10 +106,6 @@ final class SRKFlowCoordinator {
         SRKLogger.logKey(.deviceID, "device=\(deviceID)")
 
         // ── 5. AppsFlyer ID ──────────────────────────────────────────────
-        // Variant A: appsFlyerIDProvider == nil → appsFlyerID = ""
-        // Variant B: host provided closure → call it to get UID
-        //            AppsFlyerLib.shared().start() has already been called
-        //            by the host in performATTForAppsFlyer(), so UID is available
         let appsFlyerID = config.appsFlyerIDProvider?() ?? ""
         if appsFlyerID.isEmpty {
             SRKLogger.log(.debug, "Coordinator: AppsFlyer not connected or UID unavailable")
@@ -145,13 +141,13 @@ final class SRKFlowCoordinator {
                 saveAndApply(.main, url: nil)
             }
 
+            // Post-install: check if a fresher token arrived during pipeline
             tryRefreshIfNeeded(currentFCM: fcmToken, deviceID: deviceID)
 
         case .failure(let error):
             SRKLogger.log(.error, "Coordinator: register error — \(error.localizedDescription)")
             SRKLogger.logKey(.error, "register failed: \(error.localizedDescription)")
 
-            // .noNetwork — no lock saved, next start will retry
             if error == .noNetwork {
                 viewModel?.setMain()
                 resolved = true
@@ -197,7 +193,6 @@ final class SRKFlowCoordinator {
     // MARK: - Device ID
 
     private func resolveDeviceID(attAuthorized: Bool) -> String {
-        // Use IDFA if ATT authorized and host stored it in UserDefaults
         if attAuthorized,
            let idfa = UserDefaults.standard.string(forKey: "srk.device.idfa"),
            !idfa.isEmpty,
@@ -206,7 +201,6 @@ final class SRKFlowCoordinator {
             return idfa
         }
 
-        // Fallback — stable UUID generated once per install
         if let existing = UserDefaults.standard.string(forKey: stableUUIDKey) {
             return existing
         }
@@ -254,11 +248,18 @@ final class SRKFlowCoordinator {
 
     // MARK: - FCM Refresh
 
+    /// Sends /sync only when:
+    /// - install was completed (sessionDone = true)
+    /// - ATT was authorized
+    /// - FCM token changed since install
     func tryRefreshIfNeeded(currentFCM: String, deviceID: String) {
         guard !currentFCM.isEmpty else { return }
 
         let sessionDone = UserDefaults.standard.bool(forKey: sessionDoneKey)
-        guard sessionDone else { return }
+        guard sessionDone else {
+            SRKLogger.log(.debug, "Sync: skip — session not done")
+            return
+        }
 
         let attAuthorized = UserDefaults.standard.bool(forKey: attAuthorizedKey)
         guard attAuthorized else {
@@ -277,7 +278,7 @@ final class SRKFlowCoordinator {
         refreshInFlight = true
         lastRefreshFCM  = currentFCM
         SRKLogger.log(.info, "Sync: new FCM → POST /sync")
-        SRKLogger.logKey(.fcmRefresh, "fcm_refresh=\(String(currentFCM))")
+        SRKLogger.logKey(.fcmRefresh, "fcm_refresh=\(currentFCM)")
 
         Task {
             let appsFlyerID = config.appsFlyerIDProvider?() ?? ""
