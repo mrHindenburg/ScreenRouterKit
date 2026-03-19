@@ -9,8 +9,6 @@ struct SRKWebView_Preview: View {
 
     var body: some View {
         VStack(spacing: 0) {
-
-            // ── URL Picker ──────────────────────────────────────────────
             Picker("URL", selection: $selectedURL) {
                 ForEach(PreviewURL.allCases) { url in
                     Text(url.label).tag(url)
@@ -26,7 +24,7 @@ struct SRKWebView_Preview: View {
             SRKWebContainerView(url: selectedURL.rawValue)
                 .id(id)
         }
-        .onChange(of: selectedURL) { _ in
+        .onChange(of: selectedURL) { _, _ in
             id = UUID()
         }
         .ignoresSafeArea(edges: .bottom)

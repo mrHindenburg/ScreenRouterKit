@@ -67,6 +67,11 @@ public final class ScreenRouterKit {
     private var viewModel: SRKViewModel?
     private var started = false
 
+    /// Created fresh each pipeline run.
+    /// SRKRootView fires this when splash calls onComplete().
+    /// SRKFlowCoordinator awaits it as one of the two unblock conditions.
+    private(set) var splashSignal = SRKSplashSignal()
+
     // MARK: ─────────────────────────────────────────────────────────────────
     // MARK: SIMPLE — splash only, no networking
     // MARK: ─────────────────────────────────────────────────────────────────
@@ -118,7 +123,47 @@ public final class ScreenRouterKit {
     // MARK: VARIANT A — without AppsFlyer
     // MARK: ─────────────────────────────────────────────────────────────────
 
-    /// Single entry point for variant A.
+    /// Convenience overload — pass only the host (no scheme, no slashes).
+    /// https:// is added automatically.
+    /// Paths are fixed: /v1/public/install and /v1/public/refresh.
+    ///
+    /// ```swift
+    /// WindowGroup {
+    ///     ScreenRouterKit.shared.start(
+    ///         host:     "coolsterwill.help",
+    ///         bundleID: "6759095589",
+    ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
+    ///         mainView: { AnyView(ContentView()) }
+    ///     )
+    /// }
+    /// ```
+    public func start(
+        host: String,
+        bundleID: String,
+        splash: SRKSplashProvider?,
+        mainView: SRKMainViewProvider?,
+        debugMode: SRKDebugMode = .disabled,
+        pushEnabled: Bool = true,
+        fallbackURL: String? = nil,
+        defaultOrientations: UIInterfaceOrientationMask = .portrait,
+        webOrientations: UIInterfaceOrientationMask = .all
+    ) -> some View {
+        let base = "https://\(host.trimmingCharacters(in: .init(charactersIn: "/")))"
+        return start(
+            registerURL:         "\(base)/v1/public/install",
+            syncURL:             "\(base)/v1/public/refresh",
+            bundleID:            bundleID,
+            splash:              splash,
+            mainView:            mainView,
+            debugMode:           debugMode,
+            pushEnabled:         pushEnabled,
+            fallbackURL:         fallbackURL,
+            defaultOrientations: defaultOrientations,
+            webOrientations:     webOrientations
+        )
+    }
+
+    /// Full URL entry point for variant A.
     /// Returns a self-contained View that switches between splash / WebView / mainView. Att handled by library always.
     ///
     /// ```swift
@@ -351,6 +396,7 @@ public final class ScreenRouterKit {
         started          = false
         viewModel        = nil
         mainViewProvider = nil
+        splashSignal     = SRKSplashSignal()
     }
 
     // MARK: - Private

@@ -2,6 +2,7 @@
 // ScreenRouterKit
 
 import SwiftUI
+import Combine
 
 // MARK: - Ready Gate
 
@@ -101,6 +102,7 @@ public struct SRKRootView: View {
             // In full mode:   if server is fast → waits for splash; if splash is fast → waits for server.
             splash {
                 gate.value.splashReady()
+                ScreenRouterKit.shared.splashSignal.complete()
             }
         } else {
             Color(.systemBackground)
@@ -202,3 +204,4 @@ public final class SRKOrientationProxy {
         SRKLogger.log(.debug, "Orientation: \(mask.rawValue)")
     }
 }
+

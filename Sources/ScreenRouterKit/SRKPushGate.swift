@@ -54,6 +54,22 @@ final class SRKPushGate: Sendable {
         return await waitForStableFCMToken()
     }
 
+    /// Optimistic variant — requests permission and registers APNs so Firebase
+    /// starts fetching the FCM token in the background, then returns immediately.
+    /// Does NOT wait for the token. The coordinator polls via waitForFCMToken()
+    /// and falls back to /sync when the token eventually arrives.
+    func requestPermissionOnly() async {
+        if enabled {
+            await requestPermission()
+        } else {
+            SRKLogger.log(.debug, "Push: permission request skipped (pushEnabled=false)")
+        }
+        await MainActor.run {
+            UIApplication.shared.registerForRemoteNotifications()
+        }
+        SRKLogger.log(.debug, "Push: permission requested — token will arrive async")
+    }
+
     // MARK: - Private
 
     private func requestPermission() async {
@@ -192,3 +208,4 @@ final class TokenBox: @unchecked Sendable {
         }
     }
 }
+

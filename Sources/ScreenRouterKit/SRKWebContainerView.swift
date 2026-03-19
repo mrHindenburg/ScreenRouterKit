@@ -5,6 +5,10 @@ import SwiftUI
 import Combine
 import Network
 
+#Preview("WebView — YouTube") {
+    SRKWebContainerView(url: "https://highflybet-cz.com")
+}
+
 // MARK: - Web Container View
 
 struct SRKWebContainerView: View {
@@ -20,30 +24,22 @@ struct SRKWebContainerView: View {
     @State private var alertMessage = ""
 
     var body: some View {
-        ZStack {
-            Color(colorScheme == .dark ? .black : .white)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-
-                // ── WebView ───────────────────────────────────────────────
+        ZStack(alignment: .bottom) {
                 SRKWebView(urlString: url, navState: navState)
-                    .ignoresSafeArea(edges: .bottom)
+                    .ignoresSafeArea()
                     .onAppear {
                         navState.lastError = nil
                         showAlert = false
                     }
 
-                // ── Navigation Toolbar ────────────────────────────────────
-                navigationToolbar
-            }
+            navigationToolbar
 
             // ── Loading Spinner ───────────────────────────────────────────
             if navState.isLoading {
                 ProgressView()
                     .scaleEffect(1.4)
                     .padding(16)
-                    .background(.ultraThinMaterial)
+                    .background(.regularMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             }
         }
@@ -79,46 +75,58 @@ struct SRKWebContainerView: View {
     private var navigationToolbar: some View {
         HStack {
             // Back
-            navButton(icon: "chevron.backward", size: 20) {
+            arrowButton(icon: "chevron.backward", isActive: navState.canGoBack) {
                 navState.navAction = .back
             }
-            .disabled(!navState.canGoBack)
-            .opacity(navState.canGoBack ? 1 : 0.5)
 
             Spacer()
 
             // Home
-            navButton(icon: "house.fill", size: 25) {
+            homeButton {
                 navState.navAction = .home
             }
 
             Spacer()
 
             // Forward
-            navButton(icon: "chevron.forward", size: 20) {
+            arrowButton(icon: "chevron.forward", isActive: navState.canGoForward) {
                 navState.navAction = .forward
             }
-            .disabled(!navState.canGoForward)
-            .opacity(navState.canGoForward ? 1 : 0.5)
         }
-        .padding(.top, 10)
         .padding(.horizontal, 25)
         .padding(.bottom, 5)
-        .background(Color(colorScheme == .dark ? .black : .white))
     }
 
-    private func navButton(
+    private func arrowButton(
         icon: String,
-        size: CGFloat,
+        isActive: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .resizable()
-                .scaledToFit()
-                .frame(width: size, height: size)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .font(.title2)
+                .foregroundColor(isActive
+                    ? (colorScheme == .dark ? .white : .black)
+                    : .gray)
+                .padding()
+                .background(.regularMaterial)
+                .clipShape(Circle())
         }
+        .disabled(!isActive)
+        .buttonStyle(SRKScaleButtonStyle())
+    }
+
+    private func homeButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "house.fill")
+                .font(.title2)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .padding()
+                .padding(.horizontal)
+                .background(.regularMaterial)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(SRKScaleButtonStyle())
     }
 
     // MARK: - Private
@@ -154,6 +162,16 @@ struct SRKWebContainerView: View {
         case .dnsLookupFailed:        return "DNS lookup failed."
         default:                      return error.localizedDescription
         }
+    }
+}
+
+// MARK: - Button Style
+
+struct SRKScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 1.18 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 

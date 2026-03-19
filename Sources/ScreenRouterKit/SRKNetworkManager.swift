@@ -96,14 +96,28 @@ final class SRKNetworkManager: Sendable {
 
         SRKLogger.log(.network, "Sync: POST \(config.syncURL)")
 
-        let result: Result<SRKSessionResponse, SRKAPIError> = await performRequest(
-            url: url, body: body, tag: "Refresh"
-        )
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 15
+            request.httpBody = try JSONEncoder().encode(body)
 
-        switch result {
-        case .success:
-            SRKLogger.log(.info, "Sync: success")
-        case .failure(let error):
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                SRKLogger.log(.error, "Sync: invalid response")
+                return
+            }
+            SRKLogger.log(.network, "Sync: status \(http.statusCode)")
+            if let text = String(data: data, encoding: .utf8) {
+                SRKLogger.log(.network, "Sync: response — \(text)")
+            }
+            if (200...299).contains(http.statusCode) {
+                SRKLogger.log(.info, "Sync: success")
+            } else {
+                SRKLogger.log(.error, "Sync: server error \(http.statusCode)")
+            }
+        } catch {
             SRKLogger.log(.error, "Sync: error — \(error.localizedDescription)")
         }
     }

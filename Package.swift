@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "ScreenRouterKit",
     platforms: [
-        .iOS(.v15)
+        .iOS(.v17)
     ],
     products: [
         .library(

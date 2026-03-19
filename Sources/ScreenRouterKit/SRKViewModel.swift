@@ -123,3 +123,4 @@ public extension Notification.Name {
     /// userInfo: ["srk_apns": String (hex)]
     static let srkAPNSTokenDidUpdate = Notification.Name("srk.srk_apns.token.didUpdate")
 }
+
