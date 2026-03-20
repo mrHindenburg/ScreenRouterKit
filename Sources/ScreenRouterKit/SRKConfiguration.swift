@@ -116,6 +116,13 @@ public struct SRKConfiguration: @unchecked Sendable {
     public let syncURL:             String
     public let bundleID:            String
     public let attHandling:         SRKATTHandling
+
+    /// Delay in seconds before the ATT alert is shown.
+    /// Useful to let the splash animation finish before the system dialog appears.
+    /// Applies only to `.managedByLibrary` — ignored for `.skip` and `.managedByHost`.
+    /// Default: `0` (no delay).
+    public let attDelay:            TimeInterval
+
     public let appsFlyerIDProvider: SRKAppsFlyerIDProvider?
     public let pushEnabled:         Bool
     public let fallbackURL:         String?
@@ -133,6 +140,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         splash:              @escaping SRKSplashProvider,
         debugMode:           SRKDebugMode                    = .disabled,
         attHandling:         SRKATTHandling                  = .skip,
+        attDelay:            TimeInterval                    = 0.5,
         defaultOrientations: UIInterfaceOrientationMask      = .portrait,
         webOrientations:     UIInterfaceOrientationMask      = .all
     ) {
@@ -141,6 +149,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.syncURL             = ""
         self.bundleID            = ""
         self.attHandling         = attHandling
+        self.attDelay            = attDelay
         self.appsFlyerIDProvider = nil
         self.pushEnabled         = false
         self.fallbackURL         = nil
@@ -157,6 +166,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         syncURL:             String,
         bundleID:            String,
         attHandling:         SRKATTHandling                  = .managedByLibrary,
+        attDelay:            TimeInterval                    = 0.5,
         splash:              SRKSplashProvider?               = nil,
         debugMode:           SRKDebugMode                    = .disabled,
         pushEnabled:         Bool                            = true,
@@ -169,6 +179,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.syncURL             = syncURL
         self.bundleID            = bundleID
         self.attHandling         = attHandling
+        self.attDelay            = attDelay
         self.appsFlyerIDProvider = nil
         self.pushEnabled         = pushEnabled
         self.fallbackURL         = fallbackURL
@@ -186,6 +197,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         bundleID:            String,
         attSignal:           SRKATTSignal,
         appsFlyerIDProvider: @escaping SRKAppsFlyerIDProvider,
+        attDelay:            TimeInterval                    = 0.5,
         splash:              SRKSplashProvider?               = nil,
         debugMode:           SRKDebugMode                    = .disabled,
         pushEnabled:         Bool                            = true,
@@ -198,6 +210,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.syncURL             = syncURL
         self.bundleID            = bundleID
         self.attHandling         = .managedByHost(signal: attSignal)
+        self.attDelay            = attDelay
         self.appsFlyerIDProvider = appsFlyerIDProvider
         self.pushEnabled         = pushEnabled
         self.fallbackURL         = fallbackURL

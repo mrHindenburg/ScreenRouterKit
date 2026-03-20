@@ -5,10 +5,6 @@ import SwiftUI
 import Combine
 import Network
 
-#Preview("WebView — YouTube") {
-    SRKWebContainerView(url: "https://highflybet-cz.com")
-}
-
 // MARK: - Web Container View
 
 struct SRKWebContainerView: View {
@@ -24,15 +20,18 @@ struct SRKWebContainerView: View {
     @State private var alertMessage = ""
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .center) {
+            
+            VStack {
                 SRKWebView(urlString: url, navState: navState)
                     .ignoresSafeArea()
                     .onAppear {
                         navState.lastError = nil
                         showAlert = false
                     }
-
-            navigationToolbar
+                
+                navigationToolbar
+            }
 
             // ── Loading Spinner ───────────────────────────────────────────
             if navState.isLoading {
@@ -108,9 +107,6 @@ struct SRKWebContainerView: View {
                 .foregroundColor(isActive
                     ? (colorScheme == .dark ? .white : .black)
                     : .gray)
-                .padding()
-                .background(.regularMaterial)
-                .clipShape(Circle())
         }
         .disabled(!isActive)
         .buttonStyle(SRKScaleButtonStyle())
@@ -121,10 +117,6 @@ struct SRKWebContainerView: View {
             Image(systemName: "house.fill")
                 .font(.title2)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
-                .padding()
-                .padding(.horizontal)
-                .background(.regularMaterial)
-                .clipShape(Capsule())
         }
         .buttonStyle(SRKScaleButtonStyle())
     }

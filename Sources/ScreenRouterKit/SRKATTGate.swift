@@ -6,9 +6,11 @@ import AppTrackingTransparency
 final class SRKATTGate: Sendable {
 
     private let handling: SRKATTHandling
+    private let delay: TimeInterval
 
-    init(handling: SRKATTHandling) {
+    init(handling: SRKATTHandling, delay: TimeInterval = 0.5) {
         self.handling = handling
+        self.delay    = delay
     }
 
     /// Requests ATT authorization according to the configured strategy.
@@ -38,6 +40,11 @@ final class SRKATTGate: Sendable {
                 let authorized = (status == .authorized)
                 SRKLogger.log(.info, "ATT: already determined — authorized=\(authorized)")
                 return authorized
+            }
+
+            if delay > 0 {
+                SRKLogger.log(.debug, "ATT: delaying request by \(delay)s")
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
 
             return await withCheckedContinuation { continuation in

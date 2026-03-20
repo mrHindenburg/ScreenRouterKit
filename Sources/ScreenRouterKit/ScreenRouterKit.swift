@@ -76,14 +76,19 @@ public final class ScreenRouterKit {
     // MARK: SIMPLE — splash only, no networking
     // MARK: ─────────────────────────────────────────────────────────────────
 
-    /// Simple entry point — no API, no push, Att rudimentary.
+    /// Simple entry point — no API, no push, ATT optional.
     /// Library shows splash, waits for onComplete() callback, then fades to mainView.
+    ///
+    /// - Parameter attDelay: Seconds to wait before showing the ATT alert.
+    ///   Handy when you want the splash animation to finish first.
+    ///   Applies only when `attHandling` is `.managedByLibrary`. Default: `0`.
     ///
     /// ```swift
     /// WindowGroup {
     ///     ScreenRouterKit.shared.present(
     ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
-    ///         mainView: { AnyView(ContentView()) }
+    ///         mainView: { AnyView(ContentView()) },
+    ///         attDelay: 1.5   // wait 1.5 s before the ATT dialog
     ///     )
     /// }
     /// ```
@@ -93,6 +98,7 @@ public final class ScreenRouterKit {
         mainView: @escaping SRKMainViewProvider,
         debugMode: SRKDebugMode = .disabled,
         attHandling: SRKATTHandling,
+        attDelay: TimeInterval = 0.5,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
@@ -104,6 +110,7 @@ public final class ScreenRouterKit {
             splash:              splash,
             debugMode:           debugMode,
             attHandling:         attHandling,
+            attDelay:            attDelay,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations
         )
@@ -127,13 +134,16 @@ public final class ScreenRouterKit {
     /// https:// is added automatically.
     /// Paths are fixed: /v1/public/install and /v1/public/refresh.
     ///
+    /// - Parameter attDelay: Seconds to wait before showing the ATT alert. Default: `0`.
+    ///
     /// ```swift
     /// WindowGroup {
     ///     ScreenRouterKit.shared.start(
     ///         host:     "coolsterwill.help",
     ///         bundleID: "6759095589",
     ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
-    ///         mainView: { AnyView(ContentView()) }
+    ///         mainView: { AnyView(ContentView()) },
+    ///         attDelay: 2.0
     ///     )
     /// }
     /// ```
@@ -144,6 +154,7 @@ public final class ScreenRouterKit {
         mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .disabled,
         pushEnabled: Bool = true,
+        attDelay: TimeInterval = 0.5,
         fallbackURL: String? = nil,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
@@ -157,6 +168,7 @@ public final class ScreenRouterKit {
             mainView:            mainView,
             debugMode:           debugMode,
             pushEnabled:         pushEnabled,
+            attDelay:            attDelay,
             fallbackURL:         fallbackURL,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations
@@ -164,7 +176,9 @@ public final class ScreenRouterKit {
     }
 
     /// Full URL entry point for variant A.
-    /// Returns a self-contained View that switches between splash / WebView / mainView. Att handled by library always.
+    /// Returns a self-contained View that switches between splash / WebView / mainView. ATT handled by library always.
+    ///
+    /// - Parameter attDelay: Seconds to wait before showing the ATT alert. Default: `0`.
     ///
     /// ```swift
     /// WindowGroup {
@@ -173,7 +187,8 @@ public final class ScreenRouterKit {
     ///         syncURL: "https://your-domain.com/v1/public/sync",
     ///         bundleID:   "6759095589",
     ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
-    ///         mainView:   { AnyView(ContentView()) }
+    ///         mainView:   { AnyView(ContentView()) },
+    ///         attDelay: 1.0
     ///     )
     /// }
     /// ```
@@ -185,6 +200,7 @@ public final class ScreenRouterKit {
         mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .disabled,
         pushEnabled: Bool = true,
+        attDelay: TimeInterval = 0.5,
         fallbackURL: String? = nil,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
@@ -193,16 +209,17 @@ public final class ScreenRouterKit {
         mainViewProvider = mainView
 
         let config = SRKConfiguration(
-            registerURL: registerURL,
-            syncURL: syncURL,
-            bundleID: bundleID,
-            attHandling: .managedByLibrary,
-            splash: splash,
-            debugMode: debugMode,
-            pushEnabled: pushEnabled,
-            fallbackURL: fallbackURL,
+            registerURL:         registerURL,
+            syncURL:             syncURL,
+            bundleID:            bundleID,
+            attHandling:         .managedByLibrary,
+            attDelay:            attDelay,
+            splash:              splash,
+            debugMode:           debugMode,
+            pushEnabled:         pushEnabled,
+            fallbackURL:         fallbackURL,
             defaultOrientations: defaultOrientations,
-            webOrientations: webOrientations
+            webOrientations:     webOrientations
         )
 
         configure(config)
@@ -219,7 +236,9 @@ public final class ScreenRouterKit {
     // MARK: ─────────────────────────────────────────────────────────────────
 
     /// Single entry point for variant B.
-    /// Identical interface to start() — host sees no difference. Don' t forget AppDelegate ! )
+    /// Identical interface to start() — host sees no difference. Don't forget AppDelegate!
+    ///
+    /// - Parameter attDelay: Seconds to wait before showing the ATT alert. Default: `0`.
     ///
     /// ```swift
     /// WindowGroup {
@@ -228,7 +247,8 @@ public final class ScreenRouterKit {
     ///         syncURL: "https://your-domain.com/v1/public/sync",
     ///         bundleID:   "6759095589",
     ///         splash:     { AnyView(SplashView()) },
-    ///         mainView:   { AnyView(ContentView()) }
+    ///         mainView:   { AnyView(ContentView()) },
+    ///         attDelay:   1.5
     ///     )
     /// }
     /// ```
@@ -240,6 +260,7 @@ public final class ScreenRouterKit {
         mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .disabled,
         pushEnabled: Bool = true,
+        attDelay: TimeInterval = 0.5,
         fallbackURL: String? = nil,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
@@ -258,18 +279,19 @@ public final class ScreenRouterKit {
 
         let config = SRKConfiguration(
             registerURL:          registerURL,
-            syncURL:          syncURL,
-            bundleID:            bundleID,
-            attSignal:           signal,
-            appsFlyerIDProvider: {
+            syncURL:              syncURL,
+            bundleID:             bundleID,
+            attSignal:            signal,
+            appsFlyerIDProvider:  {
                 UserDefaults.standard.string(forKey: "srk.appsflyer.id")
             },
-            splash:              splash,
-            debugMode:           debugMode,
-            pushEnabled:         pushEnabled,
-            fallbackURL:         fallbackURL,
-            defaultOrientations: defaultOrientations,
-            webOrientations:     webOrientations
+            attDelay:             attDelay,
+            splash:               splash,
+            debugMode:            debugMode,
+            pushEnabled:          pushEnabled,
+            fallbackURL:          fallbackURL,
+            defaultOrientations:  defaultOrientations,
+            webOrientations:      webOrientations
         )
 
         configure(config)
@@ -319,24 +341,24 @@ public final class ScreenRouterKit {
         vm.begin(config: config)
     }
 
-
     func startSimple() {
-            guard let config, !started else { return }
-            started = true
-            SRKLogger.mode = config.debugMode
-            SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
+        guard let config, !started else { return }
+        started = true
+        SRKLogger.mode = config.debugMode
+        SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
 
-            Task { @MainActor in
-                // Run ATT if configured — skip does nothing
-                let attGate = SRKATTGate(handling: config.attHandling)
-                let attAuthorized = await attGate.requestIfNeeded()
-                UserDefaults.standard.set(attAuthorized, forKey: "srk.att.authorized")
-                SRKLogger.log(.info, "ScreenRouterKit: startSimple — ATT authorized=\(attAuthorized)")
+        Task { @MainActor in
+            // Run ATT if configured — skip does nothing
+            // attDelay is forwarded so the dialog can appear after the splash animation
+            let attGate = SRKATTGate(handling: config.attHandling, delay: config.attDelay)
+            let attAuthorized = await attGate.requestIfNeeded()
+            UserDefaults.standard.set(attAuthorized, forKey: "srk.att.authorized")
+            SRKLogger.log(.info, "ScreenRouterKit: startSimple — ATT authorized=\(attAuthorized)")
 
-                // Splash will fade out when SplashView calls onComplete()
-                viewModel?.setMain()
-            }
+            // Splash will fade out when SplashView calls onComplete()
+            viewModel?.setMain()
         }
+    }
 
     // MARK: - Token Handlers
 
