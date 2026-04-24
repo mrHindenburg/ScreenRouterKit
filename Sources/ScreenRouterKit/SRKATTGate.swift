@@ -8,13 +8,11 @@ final class SRKATTGate: Sendable {
     private let handling: SRKATTHandling
     private let delay: TimeInterval
 
-    init(handling: SRKATTHandling, delay: TimeInterval = 0.5) {
+    init(handling: SRKATTHandling, delay: TimeInterval) {
         self.handling = handling
         self.delay    = delay
     }
 
-    /// Requests ATT authorization according to the configured strategy.
-    /// Always completes — either after the user responds or immediately (skip).
     func requestIfNeeded() async -> Bool {
         switch handling {
 
@@ -35,7 +33,6 @@ final class SRKATTGate: Sendable {
                 ATTrackingManager.trackingAuthorizationStatus
             }
 
-            // Already determined — skip showing the alert again
             if status != .notDetermined {
                 let authorized = (status == .authorized)
                 SRKLogger.log(.info, "ATT: already determined — authorized=\(authorized)")

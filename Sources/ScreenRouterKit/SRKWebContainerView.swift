@@ -1,11 +1,7 @@
-// SRKWebContainerView.swift
-// ScreenRouterKit
-
 import SwiftUI
 import Combine
 import Network
-
-// MARK: - Web Container View
+internal import WebKit
 
 struct SRKWebContainerView: View {
 
@@ -13,15 +9,14 @@ struct SRKWebContainerView: View {
 
     let url: String
 
-    @StateObject private var navState    = SRKNavigationState()
-    @StateObject private var connectivity = SRKConnectivityMonitor()
+    @StateObject private var navState     = SRKNavigationState()
+    @StateObject private var connectivity = RTSConnectivityMonitor()
 
     @State private var showAlert    = false
     @State private var alertMessage = ""
 
     var body: some View {
         ZStack(alignment: .center) {
-            
             VStack {
                 SRKWebView(urlString: url, navState: navState)
                     .ignoresSafeArea()
@@ -29,11 +24,10 @@ struct SRKWebContainerView: View {
                         navState.lastError = nil
                         showAlert = false
                     }
-                
+
                 navigationToolbar
             }
 
-            // ── Loading Spinner ───────────────────────────────────────────
             if navState.isLoading {
                 ProgressView()
                     .scaleEffect(1.4)
@@ -69,25 +63,20 @@ struct SRKWebContainerView: View {
         }
     }
 
-    // MARK: - Navigation Toolbar
-
     private var navigationToolbar: some View {
         HStack {
-            // Back
             arrowButton(icon: "chevron.backward", isActive: navState.canGoBack) {
                 navState.navAction = .back
             }
 
             Spacer()
 
-            // Home
             homeButton {
                 navState.navAction = .home
             }
 
             Spacer()
 
-            // Forward
             arrowButton(icon: "chevron.forward", isActive: navState.canGoForward) {
                 navState.navAction = .forward
             }
@@ -109,7 +98,7 @@ struct SRKWebContainerView: View {
                     : .gray)
         }
         .disabled(!isActive)
-        .buttonStyle(SRKScaleButtonStyle())
+        .buttonStyle(RTSScaleButtonStyle())
     }
 
     private func homeButton(action: @escaping () -> Void) -> some View {
@@ -118,10 +107,8 @@ struct SRKWebContainerView: View {
                 .font(.title2)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
         }
-        .buttonStyle(SRKScaleButtonStyle())
+        .buttonStyle(RTSScaleButtonStyle())
     }
-
-    // MARK: - Private
 
     private func reloadOrLoad() {
         guard let webView = navState.webView else { return }
@@ -157,9 +144,7 @@ struct SRKWebContainerView: View {
     }
 }
 
-// MARK: - Button Style
-
-struct SRKScaleButtonStyle: ButtonStyle {
+struct RTSScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 1.18 : 1.0)
@@ -167,13 +152,11 @@ struct SRKScaleButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Connectivity Monitor
-
-final class SRKConnectivityMonitor: ObservableObject {
+final class RTSConnectivityMonitor: ObservableObject {
     @Published private(set) var connected = true
 
     private let monitor = NWPathMonitor()
-    private let queue   = DispatchQueue(label: "srk.connectivity")
+    private let queue   = DispatchQueue(label: "wbc.connectivity")
 
     init() {
         monitor.pathUpdateHandler = { [weak self] path in

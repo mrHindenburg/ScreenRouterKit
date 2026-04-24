@@ -1,53 +1,39 @@
 import Foundation
 import Network
 
-// MARK: - Route Lock
-
 enum SRKRoute: String {
     case main
     case web
 }
 
-// MARK: - Coordinator
-
 @MainActor
 final class SRKFlowCoordinator {
-
-    // MARK: Dependencies
 
     private let config: SRKConfiguration
     private let attGate: SRKATTGate
     private let pushGate: SRKPushGate
     private let networkManager: SRKNetworkManager
 
-    // MARK: State
-
-    weak var viewModel: SRKViewModel?
+    weak var viewModel: SRKRouterViewModel?
 
     private var resolved        = false
     private var refreshInFlight = false
     private var lastRefreshFCM: String?
 
-    // MARK: UserDefaults Keys
-
-    private let routeLockKey     = "srk.flow.lock"
-    private let storedURLKey     = "srk.flow.url"
-    private let sessionDoneKey   = "srk.session.done"
-    private let sessionFCMKey    = "srk.session.fcm"
-    private let sessionDeviceKey = "srk.session.device"
-    private let attAuthorizedKey = "srk.att.authorized"
-    private let stableUUIDKey    = "srk.stable.uuid"
-
-    // MARK: Init
+    private let routeLockKey     = "wbc.flow.lock"
+    private let storedURLKey     = "wbc.flow.url"
+    private let sessionDoneKey   = "wbc.session.done"
+    private let sessionFCMKey    = "wbc.session.fcm"
+    private let sessionDeviceKey = "wbc.session.device"
+    private let attAuthorizedKey = "wbc.att.authorized"
+    private let stableUUIDKey    = "wbc.stable.uuid"
 
     init(config: SRKConfiguration) {
         self.config         = config
-        self.attGate        = SRKATTGate(handling: config.attHandling)
+        self.attGate        = SRKATTGate(handling: config.attHandling, delay: config.attDelay)
         self.pushGate       = SRKPushGate(enabled: config.pushEnabled)
         self.networkManager = SRKNetworkManager(config: config)
     }
-
-    // MARK: - Start
 
     func start() {
         guard !resolved else {
@@ -67,26 +53,10 @@ final class SRKFlowCoordinator {
         Task { await runPipeline() }
     }
 
-    // MARK: - Pipeline
-    //
-    // Flow:
-    //   1. Network check
-    //   2. ATT — await to completion (needed for correct deviceID)
-    //   3. Push permission — triggers APNs/FCM in background
-    //   4. Device ID resolved
-    //   5. Race: FCM stable token vs splash onComplete() — whichever comes FIRST
-    //      unblocks /register. The other task is cancelled.
-    //      • FCM wins  → /register fires immediately with the token
-    //      • Splash wins → /register fires with cached token or ""
-    //      Splash is always ~3s so FCM has that window to arrive.
-    //   6. POST /register → open URL
-    //   7. Every new FCM token afterward → POST /sync
-
     private func runPipeline() async {
         SRKLogger.log(.debug, "Coordinator: pipeline start")
         viewModel?.setLoading()
 
-        // ── 1. Network ───────────────────────────────────────────────────
         guard await waitForNetwork() else {
             SRKLogger.log(.info, "Coordinator: no network → main (no lock)")
             viewModel?.setMain()
@@ -94,23 +64,20 @@ final class SRKFlowCoordinator {
             return
         }
 
-        // ── 2. ATT ───────────────────────────────────────────────────────
         SRKLogger.log(.debug, "Coordinator: step 2 — ATT")
         let attAuthorized = await attGate.requestIfNeeded()
         UserDefaults.standard.set(attAuthorized, forKey: attAuthorizedKey)
         SRKLogger.log(.info, "Coordinator: ATT authorized=\(attAuthorized)")
 
-        // ── 3. Push permission ────────────────────────────────────────────
         if config.pushEnabled {
             await pushGate.requestPermissionOnly()
         }
 
-        // ── 4. Device ID ─────────────────────────────────────────────────
         let deviceID = resolveDeviceID(attAuthorized: attAuthorized)
         SRKLogger.log(.debug, "Coordinator: deviceID=\(deviceID)")
         SRKLogger.logKey(.deviceID, "device=\(deviceID)")
+        startFCMTokenObserver(deviceID: deviceID) // observ fcm
 
-        // ── 5. AppsFlyer ID ──────────────────────────────────────────────
         let appsFlyerID = config.appsFlyerIDProvider?() ?? ""
         if appsFlyerID.isEmpty {
             SRKLogger.log(.debug, "Coordinator: AppsFlyer not connected or UID unavailable")
@@ -118,14 +85,6 @@ final class SRKFlowCoordinator {
             SRKLogger.log(.info, "Coordinator: appsFlyerID=\(appsFlyerID)")
         }
 
-        // ── 6. Fire /install immediately (no FCM) + wait for splash ─────────
-        // /install and splash run in parallel:
-        //   • /install fires right away — FCM field is always empty string
-        //   • splash plays its animation independently
-        // URL from server is held until splash calls onComplete() — only then
-        // do we show web or main. This way UX is never blocked by network.
-        //
-        // FCM is never sent in /install. Stable token → /sync only, after settle.
         SRKLogger.log(.debug, "Coordinator: step 6 — /install + splash in parallel")
 
         async let installResult = networkManager.fetchRegister(
@@ -138,23 +97,8 @@ final class SRKFlowCoordinator {
         let (result, _) = await (installResult, splashWait)
 
         SRKLogger.log(.debug, "Coordinator: splash done + /install returned — applying route")
-
-        // ── 6b. Background: stable FCM → /sync ───────────────────────────
-        Task {
-            if let stable = await self.waitForStableFCMTokenBackground() {
-                let storedDevice = UserDefaults.standard.string(forKey: self.sessionDeviceKey) ?? ""
-                guard !storedDevice.isEmpty else { return }
-                SRKLogger.log(.info, "Coordinator: stable FCM ready — triggering /sync")
-                await MainActor.run {
-                    self.tryRefreshIfNeeded(currentFCM: stable, deviceID: storedDevice)
-                }
-            }
-        }
-
-        // ── 7. Apply route from /install response ─────────────────────────
         SRKLogger.logKey(.fcmFirst, "fcm_at_register=(empty by design)")
 
-        // ── 8. Handle /install response ──────────────────────────────────────
         switch result {
         case .success(let response):
             let raw = response.url.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -163,7 +107,7 @@ final class SRKFlowCoordinator {
             SRKLogger.logKey(.finalURL, "url=\(urlLog)")
 
             UserDefaults.standard.set(true,     forKey: sessionDoneKey)
-            UserDefaults.standard.set("",        forKey: sessionFCMKey)   // FCM comes via /sync
+            UserDefaults.standard.set("",        forKey: sessionFCMKey)
             UserDefaults.standard.set(deviceID,  forKey: sessionDeviceKey)
 
             if isValidWebURL(raw) {
@@ -186,63 +130,41 @@ final class SRKFlowCoordinator {
         }
     }
 
-    // MARK: - Splash Wait
-
-    /// Awaits the splash signal fired by SRKRootView when SplashView calls onComplete().
     private func waitForSplash() async {
         SRKLogger.log(.debug, "Coordinator: waiting for splash signal")
         await ScreenRouterKit.shared.splashSignal.wait()
         SRKLogger.log(.debug, "Coordinator: splash signal received")
     }
 
-    // MARK: - Stable FCM Wait (background, no deadline)
-
-    /// Polls until a stable FCM token is observed.
-    /// "Stable" = same token unchanged for `stableWindow` seconds.
-    /// No timeout — runs until cancelled or stable token found.
-    /// Used in background task after /install to feed /sync.
-    private func waitForStableFCMTokenBackground(stableWindow: Double = 0.8) async -> String? {
-        SRKLogger.log(.debug, "Coordinator: background FCM stability watch started")
-
-        var lastToken:   String? = nil
-        var stableSince: Date   = .distantPast
-
-        // Seed from existing storage
-        if let t = SRKPushGate.shared.fcmToken
-            ?? UserDefaults.standard.string(forKey: "srk.fcm.token"),
-           !t.isEmpty {
-            lastToken   = t
-            stableSince = Date()
-        }
-
-        while !Task.isCancelled {
-            let current = SRKPushGate.shared.fcmToken
-                ?? UserDefaults.standard.string(forKey: "srk.fcm.token")
-
-            if let current, !current.isEmpty {
-                if current != lastToken {
-                    lastToken   = current
-                    stableSince = Date()
-                    SRKLogger.log(.debug, "Coordinator: background FCM changed — resetting window")
-                } else if Date().timeIntervalSince(stableSince) >= stableWindow {
-                    SRKLogger.log(.info, "Coordinator: background FCM stable — \(current)")
-                    return current
+    private func startFCMTokenObserver(deviceID: String) {
+        Task {
+            SRKLogger.log(.debug, "Coordinator: Background FCM observer started")
+            
+            while !Task.isCancelled {
+                let currentFCM = SRKPushGate.shared.fcmToken ?? UserDefaults.standard.string(forKey: "wbc.fcm.token") ?? ""
+                
+                // if tocken here, and new, and install complete
+                let sessionDone = UserDefaults.standard.bool(forKey: sessionDoneKey)
+                
+                if sessionDone, !currentFCM.isEmpty, currentFCM != self.lastRefreshFCM, !self.refreshInFlight {
+                    
+                    SRKLogger.log(.info, "Coordinator: New stable FCM detected — triggering /sync")
+                    await MainActor.run {
+                        self.tryRefreshIfNeeded(currentFCM: currentFCM, deviceID: deviceID)
+                    }
                 }
+                
+                // check for tocken every sec
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
-
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s poll
         }
-
-        return nil
     }
-
-    // MARK: - Network Check
 
     private func waitForNetwork(timeoutSeconds: Double = 10.0) async -> Bool {
         SRKLogger.log(.debug, "Coordinator: checking network")
 
         let monitor = NWPathMonitor()
-        let queue   = DispatchQueue(label: "srk.network.check")
+        let queue   = DispatchQueue(label: "wbc.network.check")
 
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -269,11 +191,9 @@ final class SRKFlowCoordinator {
         }
     }
 
-    // MARK: - Device ID
-
     private func resolveDeviceID(attAuthorized: Bool) -> String {
         if attAuthorized,
-           let idfa = UserDefaults.standard.string(forKey: "srk.device.idfa"),
+           let idfa = UserDefaults.standard.string(forKey: "wbc.device.idfa"),
            !idfa.isEmpty,
            idfa != "00000000-0000-0000-0000-000000000000" {
             SRKLogger.log(.debug, "Coordinator: using IDFA")
@@ -289,16 +209,12 @@ final class SRKFlowCoordinator {
         return new
     }
 
-    // MARK: - Helpers
-
     private func isValidWebURL(_ string: String) -> Bool {
         guard !string.isEmpty,
               let url = URL(string: string),
               let scheme = url.scheme else { return false }
         return scheme == "http" || scheme == "https"
     }
-
-    // MARK: - Route Lock
 
     private func loadRouteLock() -> SRKRoute? {
         guard let raw = UserDefaults.standard.string(forKey: routeLockKey) else { return nil }
@@ -317,6 +233,11 @@ final class SRKFlowCoordinator {
         case .main:
             viewModel?.setMain()
         case .web:
+            guard !config.nativeOnly else {
+                SRKLogger.log(.info, "Coordinator: nativeOnly=true — suppressing WebView, showing main")
+                viewModel?.setMain()
+                return
+            }
             let finalURL = url
                 ?? UserDefaults.standard.string(forKey: storedURLKey)
                 ?? config.fallbackURL
@@ -325,10 +246,6 @@ final class SRKFlowCoordinator {
         }
     }
 
-    // MARK: - FCM Refresh
-
-    /// Sends POST /sync whenever a new FCM token arrives after /register.
-    /// ATT check intentionally absent — sync fires regardless of tracking status.
     func tryRefreshIfNeeded(currentFCM: String, deviceID: String) {
         guard !currentFCM.isEmpty else { return }
 
@@ -365,8 +282,6 @@ final class SRKFlowCoordinator {
         }
     }
 }
-
-// MARK: - SRKAPIError Equatable
 
 extension SRKAPIError: Equatable {
     static func == (lhs: SRKAPIError, rhs: SRKAPIError) -> Bool {

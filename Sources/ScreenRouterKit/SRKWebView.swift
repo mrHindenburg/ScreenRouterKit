@@ -1,18 +1,11 @@
-// SRKWebView.swift
-// ScreenRouterKit
-
 import SwiftUI
 import Combine
-@preconcurrency import WebKit
-
-// MARK: - WKWebView UIViewRepresentable
+internal import WebKit
 
 struct SRKWebView: UIViewRepresentable {
 
     let urlString: String
     @ObservedObject var navState: SRKNavigationState
-
-    // MARK: - Make
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -23,15 +16,12 @@ struct SRKWebView: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate         = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
-        webView.customUserAgent = WLKConstants.userAgent
+        webView.customUserAgent = RTSConstants.userAgent
 
-        // Store weak ref in navState
         navState.webView = webView
 
-        // Subscribe to navigation commands
         subscribeToNavActions(webView: webView, context: context)
 
-        // Load initial URL
         if let url = URL(string: urlString) {
             let request = URLRequest(url: url)
             context.coordinator.homeRequest = request
@@ -47,31 +37,25 @@ struct SRKWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    // MARK: - Private
-
     private func makeConfiguration() -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
 
-        // Media
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
 
-        // JavaScript
         let prefs = WKWebpagePreferences()
         prefs.allowsContentJavaScript = true
         config.defaultWebpagePreferences = prefs
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
 
-        // UserScript — UserAgent override + window.open interception
         config.userContentController.addUserScript(
             WKUserScript(
-                source: WLKConstants.injectedScript,
+                source: RTSConstants.injectedScript,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: false
             )
         )
 
-        // Persistent storage (cookies, localStorage)
         config.websiteDataStore = WKWebsiteDataStore.default()
 
         return config
@@ -100,22 +84,17 @@ struct SRKWebView: UIViewRepresentable {
             .store(in: &context.coordinator.cancellables)
     }
 
-    // MARK: - Coordinator
-
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
         var parent: SRKWebView
         var cancellables = Set<AnyCancellable>()
         var homeRequest: URLRequest?
 
-        // Skip spinner on back/forward — it looks odd
         private var suppressSpinner = false
 
         init(_ parent: SRKWebView) {
             self.parent = parent
         }
-
-        // MARK: Navigation Policy
 
         func webView(
             _ webView: WKWebView,
@@ -129,7 +108,6 @@ struct SRKWebView: UIViewRepresentable {
                 return
             }
 
-            // Google OAuth — always open in WebView
             let urlString = url.absoluteString
             if urlString.contains("accounts.google.com")
                 || urlString.contains("oauth2")
@@ -141,8 +119,6 @@ struct SRKWebView: UIViewRepresentable {
             decisionHandler(.allow)
         }
 
-        // MARK: New Window (window.open)
-
         func webView(
             _ webView: WKWebView,
             createWebViewWith configuration: WKWebViewConfiguration,
@@ -153,16 +129,12 @@ struct SRKWebView: UIViewRepresentable {
 
             let urlString = url.absoluteString
             if urlString.contains("accounts.google.com") || urlString.contains("oauth2") {
-                // Google OAuth — open in current WebView
                 webView.load(URLRequest(url: url))
             } else {
-                // All others — open in Safari
                 UIApplication.shared.open(url)
             }
             return nil
         }
-
-        // MARK: JS Dialogs (stubs)
 
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                      initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
@@ -179,8 +151,6 @@ struct SRKWebView: UIViewRepresentable {
                      completionHandler: @escaping (String?) -> Void) {
             completionHandler(defaultText)
         }
-
-        // MARK: Navigation Events
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             if !suppressSpinner {
@@ -224,8 +194,6 @@ struct SRKWebView: UIViewRepresentable {
             if webView.url != nil { webView.reload() }
         }
 
-        // MARK: Media Permission
-
         func webView(
             _ webView: WKWebView,
             requestMediaCapturePermissionFor origin: WKSecurityOrigin,
@@ -236,18 +204,12 @@ struct SRKWebView: UIViewRepresentable {
             decisionHandler(.grant)
         }
 
-        // MARK: Private
-
         private func handleError(_ error: Error, webView: WKWebView) {
             let ns = error as NSError
 
-            // Navigation cancelled — ignore
             if let urlError = error as? URLError, urlError.code == .cancelled { return }
-
-            // WebKit internal redirect — ignore
             if ns.domain == "WebKitErrorDomain" && ns.code == 102 { return }
 
-            // OneSignal — ignore
             if let failURL = ns.userInfo[NSURLErrorFailingURLErrorKey] as? URL,
                failURL.host?.contains("onesignal.com") == true { return }
 
@@ -270,9 +232,7 @@ struct SRKWebView: UIViewRepresentable {
     }
 }
 
-// MARK: - Constants
-
-enum WLKConstants {
+enum RTSConstants {
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
     static let injectedScript = """

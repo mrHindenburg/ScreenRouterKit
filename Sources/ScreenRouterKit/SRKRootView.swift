@@ -1,32 +1,18 @@
-// SRKRootView.swift
-// ScreenRouterKit
-
 import SwiftUI
 import Combine
 
-// MARK: - Ready Gate
-
-/// Waits for BOTH conditions before dismissing splash:
-///   1. Pipeline resolved (vm.presented changed to .main or .web)
-///   2. SplashView called onComplete() — animation finished
-///
-/// Whichever happens first — waits for the other.
-/// Guarantees splash is never cut short even if server responds instantly.
-/// Must be used only on MainActor.
 final class SRKReadyGate {
 
     private var pipelineDone  = false
     private var splashDone    = false
     private var dismissAction: (() -> Void)?
 
-    /// Call when routing pipeline finishes.
     func pipelineReady(dismiss: @escaping () -> Void) {
         pipelineDone  = true
         dismissAction = dismiss
         tryDismiss()
     }
 
-    /// Call when SplashView's onComplete() fires.
     func splashReady() {
         splashDone = true
         tryDismiss()
@@ -45,28 +31,23 @@ final class SRKReadyGate {
     }
 }
 
-// MARK: - Root View
+public struct SRKRouterRootView: View {
 
-public struct SRKRootView: View {
-
-    @EnvironmentObject private var vm: SRKViewModel
+    @EnvironmentObject private var vm: SRKRouterViewModel
 
     @State private var splashOpacity: Double  = 1
     @State private var splashOffset:  CGSize  = .zero
     @State private var splashScale:   CGFloat = 1
     @State private var splashVisible: Bool    = true
 
-    // ReadyGate lives here — one per RootView lifecycle
-    @StateObject private var gate = ReadyGateHolder()
+    @StateObject private var gate = SRKReadyGateHolder()
 
     public init() {}
 
     public var body: some View {
         ZStack {
-            // ── Main / Web content (rendered beneath splash) ─────────────
             content
 
-            // ── Splash layer (transitions out on top) ─────────────────────
             if splashVisible {
                 splashLayer
                     .opacity(splashOpacity)
@@ -76,10 +57,9 @@ public struct SRKRootView: View {
                     .zIndex(1)
             }
         }
-        .onChange(of: vm.presented) { newState in
+        .onChange(of: vm.presented) {_, newState in
             switch newState {
             case .main, .web:
-                // Pipeline done — gate dismisses when splash also calls onComplete()
                 gate.value.pipelineReady(dismiss: fadeOutSplash)
             case .loading:
                 splashOpacity = 1
@@ -91,15 +71,9 @@ public struct SRKRootView: View {
         }
     }
 
-    // MARK: - Splash Layer
-
     @ViewBuilder
     private var splashLayer: some View {
         if let splash = ScreenRouterKit.shared.config?.splashProvider {
-            // Same SplashView for ALL modes.
-            // onComplete() → gate.splashReady() → dismiss when pipeline also done.
-            // In simple mode: pipeline resolves instantly → dismiss fires when splash calls onComplete().
-            // In full mode:   if server is fast → waits for splash; if splash is fast → waits for server.
             splash {
                 gate.value.splashReady()
                 ScreenRouterKit.shared.splashSignal.complete()
@@ -108,8 +82,6 @@ public struct SRKRootView: View {
             Color(.systemBackground)
         }
     }
-
-    // MARK: - Content (beneath splash)
 
     @ViewBuilder
     private var content: some View {
@@ -138,8 +110,6 @@ public struct SRKRootView: View {
                 }
         }
     }
-
-    // MARK: - Dismiss
 
     private func fadeOutSplash() {
         guard splashVisible else { return }
@@ -170,16 +140,10 @@ public struct SRKRootView: View {
     }
 }
 
-// MARK: - ReadyGate Holder
-
-/// Wraps SRKReadyGate in ObservableObject so @StateObject keeps it alive
-/// for the full lifetime of SRKRootView.
 @MainActor
-private final class ReadyGateHolder: ObservableObject {
+private final class SRKReadyGateHolder: ObservableObject {
     let value = SRKReadyGate()
 }
-
-// MARK: - Orientation Proxy
 
 public final class SRKOrientationProxy {
 
@@ -204,4 +168,3 @@ public final class SRKOrientationProxy {
         SRKLogger.log(.debug, "Orientation: \(mask.rawValue)")
     }
 }
-

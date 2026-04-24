@@ -1,13 +1,6 @@
-// ScreenRouterKit.swift
-// ScreenRouterKit
-
 import SwiftUI
 import Combine
 
-// MARK: - Transition Config
-
-/// Controls how the splash screen disappears.
-/// Pass to present() / start() / startWithTracking().
 public struct SRKTransitionConfig: Sendable {
 
     public let animation: Animation
@@ -21,19 +14,11 @@ public struct SRKTransitionConfig: Sendable {
         self.animation = animation
     }
 
-    /// Fade out — default
-    public static let fade = SRKTransitionConfig(type: .fade, animation: .easeInOut(duration: 0.6))
+    public static let fade      = SRKTransitionConfig(type: .fade,           animation: .easeInOut(duration: 0.6))
+    public static let slideUp   = SRKTransitionConfig(type: .slide(.up),     animation: .easeInOut(duration: 0.5))
+    public static let slideDown = SRKTransitionConfig(type: .slide(.down),   animation: .easeInOut(duration: 0.5))
+    public static let scale     = SRKTransitionConfig(type: .scale,          animation: .easeInOut(duration: 0.5))
 
-    /// Slide splash upward
-    public static let slideUp = SRKTransitionConfig(type: .slide(.up), animation: .easeInOut(duration: 0.5))
-
-    /// Slide splash downward
-    public static let slideDown = SRKTransitionConfig(type: .slide(.down), animation: .easeInOut(duration: 0.5))
-
-    /// Scale + fade
-    public static let scale = SRKTransitionConfig(type: .scale, animation: .easeInOut(duration: 0.5))
-
-    /// Custom — provide your own type and animation
     public static func custom(type: SRKTransitionType, animation: Animation) -> SRKTransitionConfig {
         SRKTransitionConfig(type: type, animation: animation)
     }
@@ -49,56 +34,29 @@ public enum SRKTransitionType: Sendable {
     }
 }
 
-// MARK: - ScreenRouterKit Facade
-
 @MainActor
 public final class ScreenRouterKit {
-
-    // MARK: Singleton
 
     public static let shared = ScreenRouterKit()
     private init() {}
 
-    // MARK: Internal State
-
     private(set) var config: SRKConfiguration?
     private(set) var transitionConfig: SRKTransitionConfig = .fade
     private(set) var mainViewProvider: SRKMainViewProvider?
-    private var viewModel: SRKViewModel?
+    private var viewModel: SRKRouterViewModel?
     private var started = false
 
-    /// Created fresh each pipeline run.
-    /// SRKRootView fires this when splash calls onComplete().
-    /// SRKFlowCoordinator awaits it as one of the two unblock conditions.
+    weak var _appDelegate: SRKAppDelegate?
+
     private(set) var splashSignal = SRKSplashSignal()
 
-    // MARK: ─────────────────────────────────────────────────────────────────
-    // MARK: SIMPLE — splash only, no networking
-    // MARK: ─────────────────────────────────────────────────────────────────
-
-    /// Simple entry point — no API, no push, ATT optional.
-    /// Library shows splash, waits for onComplete() callback, then fades to mainView.
-    ///
-    /// - Parameter attDelay: Seconds to wait before showing the ATT alert.
-    ///   Handy when you want the splash animation to finish first.
-    ///   Applies only when `attHandling` is `.managedByLibrary`. Default: `0`.
-    ///
-    /// ```swift
-    /// WindowGroup {
-    ///     ScreenRouterKit.shared.present(
-    ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
-    ///         mainView: { AnyView(ContentView()) },
-    ///         attDelay: 1.5   // wait 1.5 s before the ATT dialog
-    ///     )
-    /// }
-    /// ```
     public func present(
         transition: SRKTransitionConfig = .fade,
         splash: @escaping SRKSplashProvider,
         mainView: @escaping SRKMainViewProvider,
-        debugMode: SRKDebugMode = .disabled,
+        debugMode: SRKDebugMode = .minimal,
         attHandling: SRKATTHandling,
-        attDelay: TimeInterval = 0.5,
+        attDelay: TimeInterval,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
@@ -117,8 +75,6 @@ public final class ScreenRouterKit {
 
         configure(config)
 
-        // In simple mode pipeline just sets .main immediately —
-        // actual dismissal is driven by onComplete() from SplashView
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.startSimple()
         }
@@ -126,36 +82,17 @@ public final class ScreenRouterKit {
         return makeRootView()
     }
 
-    // MARK: ─────────────────────────────────────────────────────────────────
-    // MARK: VARIANT A — without AppsFlyer
-    // MARK: ─────────────────────────────────────────────────────────────────
-
-    /// Convenience overload — pass only the host (no scheme, no slashes).
-    /// https:// is added automatically.
-    /// Paths are fixed: /v1/public/install and /v1/public/refresh.
-    ///
-    /// - Parameter attDelay: Seconds to wait before showing the ATT alert. Default: `0`.
-    ///
-    /// ```swift
-    /// WindowGroup {
-    ///     ScreenRouterKit.shared.start(
-    ///         host:     "coolsterwill.help",
-    ///         bundleID: "6759095589",
-    ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
-    ///         mainView: { AnyView(ContentView()) },
-    ///         attDelay: 2.0
-    ///     )
-    /// }
-    /// ```
     public func start(
         host: String,
         bundleID: String,
         splash: SRKSplashProvider?,
         mainView: SRKMainViewProvider?,
-        debugMode: SRKDebugMode = .disabled,
+        debugMode: SRKDebugMode = .minimal,
         pushEnabled: Bool = true,
-        attDelay: TimeInterval = 0.5,
+        attHandling: SRKATTHandling = .managedByLibrary,
+        attDelay: TimeInterval,
         fallbackURL: String? = nil,
+        nativeOnly: Bool = false,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
@@ -168,40 +105,27 @@ public final class ScreenRouterKit {
             mainView:            mainView,
             debugMode:           debugMode,
             pushEnabled:         pushEnabled,
+            attHandling:         attHandling,
             attDelay:            attDelay,
             fallbackURL:         fallbackURL,
+            nativeOnly:          nativeOnly,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations
         )
     }
 
-    /// Full URL entry point for variant A.
-    /// Returns a self-contained View that switches between splash / WebView / mainView. ATT handled by library always.
-    ///
-    /// - Parameter attDelay: Seconds to wait before showing the ATT alert. Default: `0`.
-    ///
-    /// ```swift
-    /// WindowGroup {
-    ///     ScreenRouterKit.shared.start(
-    ///         registerURL: "https://your-domain.com/v1/public/register",
-    ///         syncURL: "https://your-domain.com/v1/public/sync",
-    ///         bundleID:   "6759095589",
-    ///         splash:   { onComplete in AnyView(SplashView(onComplete: onComplete)) },
-    ///         mainView:   { AnyView(ContentView()) },
-    ///         attDelay: 1.0
-    ///     )
-    /// }
-    /// ```
     public func start(
         registerURL: String,
         syncURL: String,
         bundleID: String,
         splash: SRKSplashProvider?,
         mainView: SRKMainViewProvider?,
-        debugMode: SRKDebugMode = .disabled,
+        debugMode: SRKDebugMode = .minimal,
         pushEnabled: Bool = true,
-        attDelay: TimeInterval = 0.5,
+        attHandling: SRKATTHandling = .managedByLibrary,
+        attDelay: TimeInterval,
         fallbackURL: String? = nil,
+        nativeOnly: Bool = false,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
@@ -212,14 +136,15 @@ public final class ScreenRouterKit {
             registerURL:         registerURL,
             syncURL:             syncURL,
             bundleID:            bundleID,
-            attHandling:         .managedByLibrary,
+            attHandling:         attHandling,
             attDelay:            attDelay,
             splash:              splash,
             debugMode:           debugMode,
             pushEnabled:         pushEnabled,
             fallbackURL:         fallbackURL,
             defaultOrientations: defaultOrientations,
-            webOrientations:     webOrientations
+            webOrientations:     webOrientations,
+            nativeOnly:          nativeOnly
         )
 
         configure(config)
@@ -231,37 +156,47 @@ public final class ScreenRouterKit {
         return makeRootView()
     }
 
-    // MARK: ─────────────────────────────────────────────────────────────────
-    // MARK: VARIANT B — with AppsFlyer
-    // MARK: ─────────────────────────────────────────────────────────────────
+    public func startWithTracking(
+        host: String,
+        bundleID: String,
+        splash: SRKSplashProvider?,
+        mainView: SRKMainViewProvider?,
+        debugMode: SRKDebugMode = .minimal,
+        pushEnabled: Bool = true,
+        attDelay: TimeInterval,
+        fallbackURL: String? = nil,
+        nativeOnly: Bool = false,
+        defaultOrientations: UIInterfaceOrientationMask = .portrait,
+        webOrientations: UIInterfaceOrientationMask = .all
+    ) -> some View {
+        let base = "https://\(host.trimmingCharacters(in: .init(charactersIn: "/")))"
+        return startWithTracking(
+            registerURL:         "\(base)/v1/public/install",
+            syncURL:             "\(base)/v1/public/refresh",
+            bundleID:            bundleID,
+            splash:              splash,
+            mainView:            mainView,
+            debugMode:           debugMode,
+            pushEnabled:         pushEnabled,
+            attDelay:            attDelay,
+            fallbackURL:         fallbackURL,
+            nativeOnly:          nativeOnly,
+            defaultOrientations: defaultOrientations,
+            webOrientations:     webOrientations
+        )
+    }
 
-    /// Single entry point for variant B.
-    /// Identical interface to start() — host sees no difference. Don't forget AppDelegate!
-    ///
-    /// - Parameter attDelay: Seconds to wait before showing the ATT alert. Default: `0`.
-    ///
-    /// ```swift
-    /// WindowGroup {
-    ///     ScreenRouterKit.shared.startWithTracking(
-    ///         registerURL: "https://your-domain.com/v1/public/register",
-    ///         syncURL: "https://your-domain.com/v1/public/sync",
-    ///         bundleID:   "6759095589",
-    ///         splash:     { AnyView(SplashView()) },
-    ///         mainView:   { AnyView(ContentView()) },
-    ///         attDelay:   1.5
-    ///     )
-    /// }
-    /// ```
     public func startWithTracking(
         registerURL: String,
         syncURL: String,
         bundleID: String,
         splash: SRKSplashProvider?,
         mainView: SRKMainViewProvider?,
-        debugMode: SRKDebugMode = .disabled,
+        debugMode: SRKDebugMode = .minimal,
         pushEnabled: Bool = true,
-        attDelay: TimeInterval = 0.5,
+        attDelay: TimeInterval,
         fallbackURL: String? = nil,
+        nativeOnly: Bool = false,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
@@ -270,11 +205,11 @@ public final class ScreenRouterKit {
 
         let signal = SRKATTSignal()
 
-        if let delegate = UIApplication.shared.delegate as? SRKAppDelegate {
+        if let delegate = _appDelegate {
             delegate.attSignal        = signal
             delegate.appsFlyerEnabled = true
         } else {
-            SRKLogger.log(.warning, "startWithTracking: AppDelegate is not SRKAppDelegate")
+            SRKLogger.log(.warning, "startWithTracking: _appDelegate not set yet")
         }
 
         let config = SRKConfiguration(
@@ -283,7 +218,7 @@ public final class ScreenRouterKit {
             bundleID:             bundleID,
             attSignal:            signal,
             appsFlyerIDProvider:  {
-                UserDefaults.standard.string(forKey: "srk.appsflyer.id")
+                UserDefaults.standard.string(forKey: "wbc.appsflyer.id")
             },
             attDelay:             attDelay,
             splash:               splash,
@@ -291,7 +226,8 @@ public final class ScreenRouterKit {
             pushEnabled:          pushEnabled,
             fallbackURL:          fallbackURL,
             defaultOrientations:  defaultOrientations,
-            webOrientations:      webOrientations
+            webOrientations:      webOrientations,
+            nativeOnly:           nativeOnly
         )
 
         configure(config)
@@ -299,17 +235,18 @@ public final class ScreenRouterKit {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             self.start()
 
-            if let delegate = UIApplication.shared.delegate as? SRKAppDelegate {
+            if let delegate = self._appDelegate {
+                delegate.attSignal        = signal
+                delegate.appsFlyerEnabled = true
                 delegate.performATTForAppsFlyer()
+            } else {
+                SRKLogger.log(.warning, "startWithTracking asyncAfter: _appDelegate not found — completing ATT signal as false")
+                signal.complete(authorized: false)
             }
         }
 
         return makeRootView()
     }
-
-    // MARK: ─────────────────────────────────────────────────────────────────
-    // MARK: Core API
-    // MARK: ─────────────────────────────────────────────────────────────────
 
     public func configure(_ config: SRKConfiguration) {
         self.config = config
@@ -319,7 +256,7 @@ public final class ScreenRouterKit {
 
     public func makeRootView() -> some View {
         let vm = getOrCreateViewModel()
-        return SRKRootView().environmentObject(vm)
+        return SRKRouterRootView().environmentObject(vm)
     }
 
     public func start() {
@@ -348,34 +285,28 @@ public final class ScreenRouterKit {
         SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
 
         Task { @MainActor in
-            // Run ATT if configured — skip does nothing
-            // attDelay is forwarded so the dialog can appear after the splash animation
             let attGate = SRKATTGate(handling: config.attHandling, delay: config.attDelay)
             let attAuthorized = await attGate.requestIfNeeded()
-            UserDefaults.standard.set(attAuthorized, forKey: "srk.att.authorized")
+            UserDefaults.standard.set(attAuthorized, forKey: "wbc.att.authorized")
             SRKLogger.log(.info, "ScreenRouterKit: startSimple — ATT authorized=\(attAuthorized)")
-
-            // Splash will fade out when SplashView calls onComplete()
             viewModel?.setMain()
         }
     }
 
-    // MARK: - Token Handlers
-
     public func handleAPNSToken(_ data: Data) {
         let hex = data.map { String(format: "%02.2hhx", $0) }.joined()
         SRKLogger.log(.info, "ScreenRouterKit: APNs (\(hex)")
-        UserDefaults.standard.set(true, forKey: "srkApnsReady")
-        UserDefaults.standard.set(hex,  forKey: "srkApnsTokenHex")
-        SRKPushGate.shared.srk_apnsToken = hex
-        NotificationCenter.default.post(name: .srkAPNSTokenDidUpdate, object: nil,
-                                        userInfo: ["srk_apns": hex])
+        UserDefaults.standard.set(true, forKey: "wbcApnsReady")
+        UserDefaults.standard.set(hex,  forKey: "wbcApnsTokenHex")
+        SRKPushGate.shared.apnsToken = hex
+        NotificationCenter.default.post(name: .wbcAPNSTokenDidUpdate, object: nil,
+                                        userInfo: ["wbc_apns": hex])
     }
 
     public func handleFCMToken(_ token: String) {
         guard !token.isEmpty else { return }
 
-        let isRefresh = started  // token arrived after pipeline already ran → refresh
+        let isRefresh = started
 
         if isRefresh {
             SRKLogger.logKey(.fcmRefresh, "fcm_refresh=\(token)")
@@ -383,19 +314,15 @@ public final class ScreenRouterKit {
             SRKLogger.logKey(.fcmFirst, "fcm_early=\(token)")
         }
 
-        UserDefaults.standard.set(token, forKey: "srk.fcm.token")
+        UserDefaults.standard.set(token, forKey: "wbc.fcm.token")
         SRKPushGate.shared.fcmToken = token
-        NotificationCenter.default.post(name: .srkFCMTokenDidUpdate, object: nil,
+        NotificationCenter.default.post(name: .wbcFCMTokenDidUpdate, object: nil,
                                         userInfo: ["token": token])
     }
-
-    // MARK: - Orientation
 
     public var currentOrientations: UIInterfaceOrientationMask {
         config?.defaultOrientations ?? .portrait
     }
-
-    // MARK: - State
 
     public var presented: SRKScene {
         viewModel?.presented ?? .loading
@@ -405,15 +332,13 @@ public final class ScreenRouterKit {
         viewModel?.$presented
     }
 
-    // MARK: - Reset
-
     public func reset() {
         SRKLogger.log(.info, "ScreenRouterKit: reset()")
         [
-            "srk.flow.lock", "srk.flow.url",
-            "srk.session.done", "srk.session.fcm", "srk.session.device",
-            "srk.att.authorized", "srk.stable.uuid",
-            "srk.device.idfa", "srk.appsflyer.id"
+            "wbc.flow.lock", "wbc.flow.url",
+            "wbc.session.done", "wbc.session.fcm", "wbc.session.device",
+            "wbc.att.authorized", "wbc.stable.uuid",
+            "wbc.device.idfa", "wbc.appsflyer.id"
         ].forEach { UserDefaults.standard.removeObject(forKey: $0) }
         started          = false
         viewModel        = nil
@@ -421,11 +346,9 @@ public final class ScreenRouterKit {
         splashSignal     = SRKSplashSignal()
     }
 
-    // MARK: - Private
-
-    private func getOrCreateViewModel() -> SRKViewModel {
+    private func getOrCreateViewModel() -> SRKRouterViewModel {
         if let existing = viewModel { return existing }
-        let vm = SRKViewModel()
+        let vm = SRKRouterViewModel()
         viewModel = vm
         return vm
     }

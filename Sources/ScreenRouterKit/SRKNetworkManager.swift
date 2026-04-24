@@ -1,15 +1,8 @@
-// SRKNetworkManager.swift
-// ScreenRouterKit
-
 import Foundation
-
-// MARK: - Response
 
 struct SRKSessionResponse: Decodable {
     let url: String
 }
-
-// MARK: - Errors
 
 enum SRKAPIError: LocalizedError {
     case invalidURL
@@ -31,8 +24,6 @@ enum SRKAPIError: LocalizedError {
     }
 }
 
-// MARK: - Network Manager
-
 final class SRKNetworkManager: Sendable {
 
     private let config: SRKConfiguration
@@ -41,12 +32,10 @@ final class SRKNetworkManager: Sendable {
         self.config = config
     }
 
-    // MARK: - Install
-
     func fetchRegister(
         fcmToken: String,
         deviceID: String,
-        appsFlyerID: String  // empty string for variant A
+        appsFlyerID: String
     ) async -> Result<SRKSessionResponse, SRKAPIError> {
 
         guard let url = URL(string: config.registerURL) else {
@@ -60,7 +49,6 @@ final class SRKNetworkManager: Sendable {
             "device":    deviceID,
         ]
 
-        // Include appsFlyerId only if available
         if !appsFlyerID.isEmpty {
             body["appsFlyerId"] = appsFlyerID
         }
@@ -70,8 +58,6 @@ final class SRKNetworkManager: Sendable {
 
         return await performRequest(url: url, body: body, tag: "Install")
     }
-
-    // MARK: - Refresh
 
     func refresh(
         fcmToken: String,
@@ -122,8 +108,6 @@ final class SRKNetworkManager: Sendable {
         }
     }
 
-    // MARK: - Private
-
     private func performRequest<T: Decodable>(
         url: URL,
         body: [String: String],
@@ -158,7 +142,6 @@ final class SRKNetworkManager: Sendable {
                 return .failure(.serverError(http.statusCode))
             }
 
-            // 204 No Content or empty body — valid success with no URL → show main
             if http.statusCode == 204 || data.isEmpty {
                 SRKLogger.log(.info, "\(tag): 204 / empty body → main")
                 let emptyJSON = Data("{\"url\":\"\"}".utf8)
