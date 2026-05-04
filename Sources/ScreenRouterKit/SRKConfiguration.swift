@@ -161,8 +161,8 @@ public struct SRKConfiguration: @unchecked Sendable {
         syncURL:             String,
         bundleID:            String,
         attSignal:           SRKATTSignal,
-        appsFlyerIDProvider: @escaping SRKAppsFlyerIDProvider,
         attDelay:            TimeInterval,
+        appsFlyerIDProvider: @escaping SRKAppsFlyerIDProvider,
         splash:              SRKSplashProvider?          = nil,
         debugMode:           SRKDebugMode               = .disabled,
         pushEnabled:         Bool                       = true,
@@ -187,4 +187,3 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.nativeOnly          = nativeOnly
     }
 }
-

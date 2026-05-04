@@ -217,10 +217,10 @@ public final class ScreenRouterKit {
             syncURL:              syncURL,
             bundleID:             bundleID,
             attSignal:            signal,
+            attDelay:             attDelay,
             appsFlyerIDProvider:  {
                 UserDefaults.standard.string(forKey: "wbc.appsflyer.id")
             },
-            attDelay:             attDelay,
             splash:               splash,
             debugMode:            debugMode,
             pushEnabled:          pushEnabled,
@@ -236,8 +236,6 @@ public final class ScreenRouterKit {
             self.start()
 
             if let delegate = self._appDelegate {
-                delegate.attSignal        = signal
-                delegate.appsFlyerEnabled = true
                 delegate.performATTForAppsFlyer()
             } else {
                 SRKLogger.log(.warning, "startWithTracking asyncAfter: _appDelegate not found — completing ATT signal as false")
