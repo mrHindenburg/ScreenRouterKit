@@ -28,15 +28,40 @@ struct SRKExample_SimpleApp: App {
                     AnyView(MyMainView())
                 },
                 debugMode: .minimal,
-                attHandling: .managedByLibrary,
+                attHandling: .skip,
                 attDelay: 1.5
             )
         }
     }
 }
 
+// MARK: - 1-A. Full Mode (з сервером, без Firebase,без AppsFlyer)
+struct SRKExample_FullApp: App {
+    @UIApplicationDelegateAdaptor(SRKExample_FullAppDelegate.self) var appDelegate
 
-// MARK: - 2. Full Mode (з сервером, без AppsFlyer)
+    var body: some Scene {
+        WindowGroup {
+            ScreenRouterKit.shared.start(
+                host: "api.myapp.com",
+                bundleID: "",
+                splash: { onComplete in
+                    AnyView(MySplashView(onComplete: onComplete))
+                },
+                mainView: {
+                    AnyView(MyMainView())
+                },
+                debugMode: .minimal,
+                pushEnabled: false,
+                attHandling: .skip,
+                attDelay: 1.5,
+                nativeOnly: false
+            )
+        }
+    }
+}
+
+
+// MARK: - 2. Full Mode (з сервером, з Firebase, без AppsFlyer)
 
 /*
  Стандартна інтеграція з бекендом.
@@ -98,7 +123,7 @@ final class SRKExample_FullAppDelegate: SRKAppDelegate, MessagingDelegate {
 }
 
 
-// MARK: - 3. Full Mode з AppsFlyer (startWithTracking)
+// MARK: - 3. Full Mode (з сервером, з Firebase, з AppsFlyer)
 
 /*
  Використовується коли потрібен AppsFlyer + ATT.
@@ -136,7 +161,7 @@ final class SRKExample_TrackingAppDelegate: SRKAppDelegate, MessagingDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // реєструємо себе до того як startWithTracking викличеться з body
+        appsFlyerEnabled = true
         ScreenRouterKit.shared._appDelegate = self
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }

@@ -43,7 +43,9 @@ final class SRKNetworkManager: Sendable {
             return .failure(.invalidURL)
         }
 
+        let id: String = UUID().uuidString
         var body: [String: String] = [
+            "id": id,
             "bundle":    config.bundleID,
             "fcm_token": fcmToken,
             "device":    deviceID,
