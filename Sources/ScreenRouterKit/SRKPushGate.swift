@@ -39,11 +39,11 @@ final class SRKPushGate: Sendable {
     }
 
     func requestPermissionOnly() async {
-        if enabled {
-            await requestPermission()
-        } else {
-            SRKLogger.log(.debug, "Push: permission request skipped (pushEnabled=false)")
+        guard enabled else {
+            SRKLogger.log(.debug, "Push: skipped (pushEnabled=false)")
+            return
         }
+        await requestPermission()
         await MainActor.run {
             UIApplication.shared.registerForRemoteNotifications()
         }

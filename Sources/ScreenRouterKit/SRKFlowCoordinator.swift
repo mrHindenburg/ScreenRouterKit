@@ -70,6 +70,8 @@ final class SRKFlowCoordinator {
         SRKLogger.log(.info, "Coordinator: ATT authorized=\(attAuthorized)")
 
         if config.pushEnabled {
+            // wait for ATT system dialog to fully dismiss before showing push prompt
+            try? await Task.sleep(nanoseconds: 600_000_000)
             await pushGate.requestPermissionOnly()
         }
 
@@ -78,11 +80,21 @@ final class SRKFlowCoordinator {
         SRKLogger.logKey(.deviceID, "device=\(deviceID)")
         startFCMTokenObserver(deviceID: deviceID) // observ fcm
 
+        if config.appsFlyerSignal != nil {
+            SRKLogger.log(.debug, "Coordinator: step 5 — waiting for AppsFlyer conversion data")
+            await waitForAppsFlyerConversionData()
+        }
+
         let appsFlyerID = config.appsFlyerIDProvider?() ?? ""
         if appsFlyerID.isEmpty {
             SRKLogger.log(.debug, "Coordinator: AppsFlyer not connected or UID unavailable")
         } else {
             SRKLogger.log(.info, "Coordinator: appsFlyerID=\(appsFlyerID)")
+        }
+
+        if let provider = config.extraInstallFieldsProvider {
+            let fields = provider()
+            SRKLogger.logKey(.appsFields, "fields=\(fields)")
         }
 
         SRKLogger.log(.debug, "Coordinator: step 6 — /install + splash in parallel")
@@ -134,6 +146,30 @@ final class SRKFlowCoordinator {
         SRKLogger.log(.debug, "Coordinator: waiting for splash signal")
         await ScreenRouterKit.shared.splashSignal.wait()
         SRKLogger.log(.debug, "Coordinator: splash signal received")
+    }
+
+    private func waitForAppsFlyerConversionData(timeoutSeconds: Double = 60.0) async {
+        guard let signal = config.appsFlyerSignal else { return }
+
+        let signalReceived = await withTaskGroup(of: Bool.self) { group -> Bool in
+            group.addTask {
+                await signal.wait()
+                return true
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+
+        if signalReceived {
+            SRKLogger.log(.info, "Coordinator: AppsFlyer conversion data received → proceeding to /install")
+        } else {
+            SRKLogger.log(.warning, "Coordinator: AppsFlyer wait timeout (\(timeoutSeconds)s) → /install will go without appsInfo")
+        }
     }
 
     private func startFCMTokenObserver(deviceID: String) {

@@ -27,6 +27,7 @@ enum SRKMinimalTag: String {
     case fcmFirst   = "FCM_FIRST"
     case fcmRefresh = "FCM_REFRESH"
     case deviceID   = "DEVICE_ID"
+    case appsFields = "APPS_FIELDS"
     case error      = "ERROR"
 }
 

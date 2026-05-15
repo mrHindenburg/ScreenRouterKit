@@ -75,31 +75,70 @@ public final class SRKSplashSignal: @unchecked Sendable {
     }
 }
 
+public final class SRKAppsFlyerSignal: @unchecked Sendable {
+
+    private var continuation: CheckedContinuation<Void, Never>?
+    private let lock = NSLock()
+    private var completed = false
+
+    public init() {}
+
+    public func complete() {
+        lock.lock()
+        let cont = continuation
+        completed = true
+        continuation = nil
+        lock.unlock()
+        cont?.resume()
+    }
+
+    func wait() async {
+        lock.lock()
+        let alreadyDone = completed
+        lock.unlock()
+        if alreadyDone { return }
+
+        await withCheckedContinuation { cont in
+            lock.lock()
+            if completed {
+                lock.unlock()
+                cont.resume()
+            } else {
+                continuation = cont
+                lock.unlock()
+            }
+        }
+    }
+}
+
 public typealias SRKSplashProvider    = (_ onComplete: @escaping () -> Void) -> AnyView
 public typealias SRKMainViewProvider  = () -> AnyView
 public typealias SRKAppsFlyerIDProvider = () -> String?
+public typealias SRKExtraInstallFieldsProvider = () -> [String: Any]
 
 public enum SRKLaunchMode: Sendable {
     case simple
-    case full(registerURL: String, syncURL: String, bundleID: String)
+    case full(registerURL: String, syncURL: String, appId: String)
 }
 
 public struct SRKConfiguration: @unchecked Sendable {
 
-    public let launchMode:          SRKLaunchMode
-    public let registerURL:         String
-    public let syncURL:             String
-    public let bundleID:            String
-    public let attHandling:         SRKATTHandling
-    public let attDelay:            TimeInterval
-    public let appsFlyerIDProvider: SRKAppsFlyerIDProvider?
-    public let pushEnabled:         Bool
-    public let fallbackURL:         String?
-    public let splashProvider:      SRKSplashProvider?
-    public let debugMode:           SRKDebugMode
-    public let defaultOrientations: UIInterfaceOrientationMask
-    public let webOrientations:     UIInterfaceOrientationMask
-    public let nativeOnly:          Bool
+    public let launchMode:                 SRKLaunchMode
+    public let registerURL:                String
+    public let syncURL:                    String
+    public let appId:                   String
+    public let attHandling:                SRKATTHandling
+    public let attDelay:                   TimeInterval
+    public let appsFlyerSignal:            SRKAppsFlyerSignal?
+    public let appsFlyerIDProvider:        SRKAppsFlyerIDProvider?
+    public let extraInstallFieldsProvider: SRKExtraInstallFieldsProvider?
+    public let pushEnabled:                Bool
+    public let fallbackURL:                String?
+    public let splashProvider:             SRKSplashProvider?
+    public let debugMode:                  SRKDebugMode
+    public let defaultOrientations:        UIInterfaceOrientationMask
+    public let webOrientations:            UIInterfaceOrientationMask
+    public let nativeOnly:                 Bool
 
     public init(
         splash:              @escaping SRKSplashProvider,
@@ -110,80 +149,89 @@ public struct SRKConfiguration: @unchecked Sendable {
         webOrientations:     UIInterfaceOrientationMask = .all,
         nativeOnly:          Bool                       = false
     ) {
-        self.launchMode          = .simple
-        self.registerURL         = ""
-        self.syncURL             = ""
-        self.bundleID            = ""
-        self.attHandling         = attHandling
-        self.attDelay            = attDelay
-        self.appsFlyerIDProvider = nil
-        self.pushEnabled         = false
-        self.fallbackURL         = nil
-        self.splashProvider      = splash
-        self.debugMode           = debugMode
-        self.defaultOrientations = defaultOrientations
-        self.webOrientations     = webOrientations
-        self.nativeOnly          = nativeOnly
+        self.launchMode                 = .simple
+        self.registerURL                = ""
+        self.syncURL                    = ""
+        self.appId                   = ""
+        self.attHandling                = attHandling
+        self.attDelay                   = attDelay
+        self.appsFlyerSignal            = nil
+        self.appsFlyerIDProvider        = nil
+        self.extraInstallFieldsProvider = nil
+        self.pushEnabled                = false
+        self.fallbackURL                = nil
+        self.splashProvider             = splash
+        self.debugMode                  = debugMode
+        self.defaultOrientations        = defaultOrientations
+        self.webOrientations            = webOrientations
+        self.nativeOnly                 = nativeOnly
     }
 
     public init(
-        registerURL:         String,
-        syncURL:             String,
-        bundleID:            String,
-        attHandling:         SRKATTHandling              = .managedByLibrary,
-        attDelay:            TimeInterval,
-        splash:              SRKSplashProvider?          = nil,
-        debugMode:           SRKDebugMode               = .disabled,
-        pushEnabled:         Bool                       = true,
-        fallbackURL:         String?                    = nil,
-        defaultOrientations: UIInterfaceOrientationMask = .portrait,
-        webOrientations:     UIInterfaceOrientationMask = .all,
-        nativeOnly:          Bool                       = false
+        registerURL:                String,
+        syncURL:                    String,
+        appId:                   String,
+        attHandling:                SRKATTHandling                  = .managedByLibrary,
+        attDelay:                   TimeInterval,
+        splash:                     SRKSplashProvider?              = nil,
+        debugMode:                  SRKDebugMode                   = .disabled,
+        pushEnabled:                Bool                           = true,
+        fallbackURL:                String?                        = nil,
+        defaultOrientations:        UIInterfaceOrientationMask     = .portrait,
+        webOrientations:            UIInterfaceOrientationMask     = .all,
+        nativeOnly:                 Bool                           = false,
+        extraInstallFieldsProvider: SRKExtraInstallFieldsProvider? = nil
     ) {
-        self.launchMode          = .full(registerURL: registerURL, syncURL: syncURL, bundleID: bundleID)
-        self.registerURL         = registerURL
-        self.syncURL             = syncURL
-        self.bundleID            = bundleID
-        self.attHandling         = attHandling
-        self.attDelay            = attDelay
-        self.appsFlyerIDProvider = nil
-        self.pushEnabled         = pushEnabled
-        self.fallbackURL         = fallbackURL
-        self.splashProvider      = splash
-        self.debugMode           = debugMode
-        self.defaultOrientations = defaultOrientations
-        self.webOrientations     = webOrientations
-        self.nativeOnly          = nativeOnly
+        self.launchMode                 = .full(registerURL: registerURL, syncURL: syncURL, appId: appId)
+        self.registerURL                = registerURL
+        self.syncURL                    = syncURL
+        self.appId                   = appId
+        self.attHandling                = attHandling
+        self.attDelay                   = attDelay
+        self.appsFlyerSignal            = nil
+        self.appsFlyerIDProvider        = nil
+        self.extraInstallFieldsProvider = extraInstallFieldsProvider
+        self.pushEnabled                = pushEnabled
+        self.fallbackURL                = fallbackURL
+        self.splashProvider             = splash
+        self.debugMode                  = debugMode
+        self.defaultOrientations        = defaultOrientations
+        self.webOrientations            = webOrientations
+        self.nativeOnly                 = nativeOnly
     }
 
     public init(
-        registerURL:         String,
-        syncURL:             String,
-        bundleID:            String,
-        attSignal:           SRKATTSignal,
-        attDelay:            TimeInterval,
-        appsFlyerIDProvider: @escaping SRKAppsFlyerIDProvider,
-        splash:              SRKSplashProvider?          = nil,
-        debugMode:           SRKDebugMode               = .disabled,
-        pushEnabled:         Bool                       = true,
-        fallbackURL:         String?                    = nil,
-        defaultOrientations: UIInterfaceOrientationMask = .portrait,
-        webOrientations:     UIInterfaceOrientationMask = .all,
-        nativeOnly:          Bool                       = false
+        registerURL:                String,
+        syncURL:                    String,
+        appId:                   String,
+        attSignal:                  SRKATTSignal,
+        attDelay:                   TimeInterval,
+        appsFlyerSignal:            SRKAppsFlyerSignal?             = nil,
+        appsFlyerIDProvider:        @escaping SRKAppsFlyerIDProvider,
+        splash:                     SRKSplashProvider?              = nil,
+        debugMode:                  SRKDebugMode                   = .disabled,
+        pushEnabled:                Bool                           = true,
+        fallbackURL:                String?                        = nil,
+        defaultOrientations:        UIInterfaceOrientationMask     = .portrait,
+        webOrientations:            UIInterfaceOrientationMask     = .all,
+        nativeOnly:                 Bool                           = false,
+        extraInstallFieldsProvider: SRKExtraInstallFieldsProvider? = nil
     ) {
-        self.launchMode          = .full(registerURL: registerURL, syncURL: syncURL, bundleID: bundleID)
-        self.registerURL         = registerURL
-        self.syncURL             = syncURL
-        self.bundleID            = bundleID
-        self.attHandling         = .managedByHost(signal: attSignal)
-        self.attDelay            = attDelay
-        self.appsFlyerIDProvider = appsFlyerIDProvider
-        self.pushEnabled         = pushEnabled
-        self.fallbackURL         = fallbackURL
-        self.splashProvider      = splash
-        self.debugMode           = debugMode
-        self.defaultOrientations = defaultOrientations
-        self.webOrientations     = webOrientations
-        self.nativeOnly          = nativeOnly
+        self.launchMode                 = .full(registerURL: registerURL, syncURL: syncURL, appId: appId)
+        self.registerURL                = registerURL
+        self.syncURL                    = syncURL
+        self.appId                   = appId
+        self.attHandling                = .managedByHost(signal: attSignal)
+        self.attDelay                   = attDelay
+        self.appsFlyerSignal            = appsFlyerSignal
+        self.appsFlyerIDProvider        = appsFlyerIDProvider
+        self.extraInstallFieldsProvider = extraInstallFieldsProvider
+        self.pushEnabled                = pushEnabled
+        self.fallbackURL                = fallbackURL
+        self.splashProvider             = splash
+        self.debugMode                  = debugMode
+        self.defaultOrientations        = defaultOrientations
+        self.webOrientations            = webOrientations
+        self.nativeOnly                 = nativeOnly
     }
 }

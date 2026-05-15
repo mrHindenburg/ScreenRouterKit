@@ -45,6 +45,7 @@ public final class ScreenRouterKit {
     private(set) var mainViewProvider: SRKMainViewProvider?
     private var viewModel: SRKRouterViewModel?
     private var started = false
+    private var configuredForTracking = false
 
     weak var _appDelegate: SRKAppDelegate?
 
@@ -84,7 +85,7 @@ public final class ScreenRouterKit {
 
     public func start(
         host: String,
-        bundleID: String,
+        appId: String,
         splash: SRKSplashProvider?,
         mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .minimal,
@@ -100,7 +101,7 @@ public final class ScreenRouterKit {
         return start(
             registerURL:         "\(base)/v1/public/install",
             syncURL:             "\(base)/v1/public/refresh",
-            bundleID:            bundleID,
+            appId:            appId,
             splash:              splash,
             mainView:            mainView,
             debugMode:           debugMode,
@@ -117,7 +118,7 @@ public final class ScreenRouterKit {
     public func start(
         registerURL: String,
         syncURL: String,
-        bundleID: String,
+        appId: String,
         splash: SRKSplashProvider?,
         mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .minimal,
@@ -135,7 +136,7 @@ public final class ScreenRouterKit {
         let config = SRKConfiguration(
             registerURL:         registerURL,
             syncURL:             syncURL,
-            bundleID:            bundleID,
+            appId:            appId,
             attHandling:         attHandling,
             attDelay:            attDelay,
             splash:              splash,
@@ -158,7 +159,7 @@ public final class ScreenRouterKit {
 
     public func startWithTracking(
         host: String,
-        bundleID: String,
+        appId: String,
         splash: SRKSplashProvider?,
         mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .minimal,
@@ -173,7 +174,7 @@ public final class ScreenRouterKit {
         return startWithTracking(
             registerURL:         "\(base)/v1/public/install",
             syncURL:             "\(base)/v1/public/refresh",
-            bundleID:            bundleID,
+            appId:            appId,
             splash:              splash,
             mainView:            mainView,
             debugMode:           debugMode,
@@ -189,7 +190,7 @@ public final class ScreenRouterKit {
     public func startWithTracking(
         registerURL: String,
         syncURL: String,
-        bundleID: String,
+        appId: String,
         splash: SRKSplashProvider?,
         mainView: SRKMainViewProvider?,
         debugMode: SRKDebugMode = .minimal,
@@ -201,40 +202,52 @@ public final class ScreenRouterKit {
         webOrientations: UIInterfaceOrientationMask = .all
     ) -> some View {
 
+        guard !configuredForTracking else {
+            return makeRootView()
+        }
+        configuredForTracking = true
+
         mainViewProvider = mainView
 
         let signal = SRKATTSignal()
+        let appsFlyerSignal = SRKAppsFlyerSignal()
 
         if let delegate = _appDelegate {
             delegate.attSignal        = signal
+            delegate.appsFlyerSignal  = appsFlyerSignal
             delegate.appsFlyerEnabled = true
         } else {
             SRKLogger.log(.warning, "startWithTracking: _appDelegate not set yet")
         }
 
         let config = SRKConfiguration(
-            registerURL:          registerURL,
-            syncURL:              syncURL,
-            bundleID:             bundleID,
-            attSignal:            signal,
-            attDelay:             attDelay,
-            appsFlyerIDProvider:  {
+            registerURL:                registerURL,
+            syncURL:                    syncURL,
+            appId:                   appId,
+            attSignal:                  signal,
+            attDelay:                   attDelay,
+            appsFlyerSignal:            appsFlyerSignal,
+            appsFlyerIDProvider:        {
                 UserDefaults.standard.string(forKey: "wbc.appsflyer.id")
             },
-            splash:               splash,
-            debugMode:            debugMode,
-            pushEnabled:          pushEnabled,
-            fallbackURL:          fallbackURL,
-            defaultOrientations:  defaultOrientations,
-            webOrientations:      webOrientations,
-            nativeOnly:           nativeOnly
+            splash:                     splash,
+            debugMode:                  debugMode,
+            pushEnabled:                pushEnabled,
+            fallbackURL:                fallbackURL,
+            defaultOrientations:        defaultOrientations,
+            webOrientations:            webOrientations,
+            nativeOnly:                 nativeOnly,
+            extraInstallFieldsProvider: SRKAppsFlyerFields.shared.extraFields
         )
 
         configure(config)
+        SRKAppsFlyerFields.setDebugMode(debugMode == .verbose)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             self.start()
+        }
 
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1 + attDelay) {
             if let delegate = self._appDelegate {
                 delegate.performATTForAppsFlyer()
             } else {
@@ -249,7 +262,7 @@ public final class ScreenRouterKit {
     public func configure(_ config: SRKConfiguration) {
         self.config = config
         SRKLogger.mode = config.debugMode
-        SRKLogger.log(.info, "ScreenRouterKit: configure() bundleID=\(config.bundleID)")
+        SRKLogger.log(.info, "ScreenRouterKit: configure() appId=\(config.appId)")
     }
 
     public func makeRootView() -> some View {
@@ -338,10 +351,11 @@ public final class ScreenRouterKit {
             "wbc.att.authorized", "wbc.stable.uuid",
             "wbc.device.idfa", "wbc.appsflyer.id"
         ].forEach { UserDefaults.standard.removeObject(forKey: $0) }
-        started          = false
-        viewModel        = nil
-        mainViewProvider = nil
-        splashSignal     = SRKSplashSignal()
+        started                = false
+        configuredForTracking  = false
+        viewModel              = nil
+        mainViewProvider       = nil
+        splashSignal           = SRKSplashSignal()
     }
 
     private func getOrCreateViewModel() -> SRKRouterViewModel {
