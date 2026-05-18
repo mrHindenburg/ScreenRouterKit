@@ -10,15 +10,11 @@ final class SRKAppsFlyerFields {
     private var conversionData: [AnyHashable: Any] = [:]
 
     func updateConversionData(_ data: [AnyHashable: Any]) {
-        lock.lock()
-        conversionData = data
-        lock.unlock()
+        lock.withLock { conversionData = data }
     }
 
     func extraFields() -> [String: Any] {
-        lock.lock()
-        let snapshot = conversionData
-        lock.unlock()
+        let snapshot: [AnyHashable: Any] = lock.withLock { conversionData }
 
         var fields: [String: Any] = [
             "appsInfo": buildAppsInfo(from: snapshot),

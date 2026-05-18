@@ -125,11 +125,14 @@ public struct SRKRouterRootView: View {
                 splashScale   = 1.15
 
             case .slide(let edge):
+                let screen = (UIApplication.shared.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .first?.screen ?? UIScreen.main).bounds
                 switch edge {
-                case .up:    splashOffset = CGSize(width: 0, height: -UIScreen.main.bounds.height)
-                case .down:  splashOffset = CGSize(width: 0, height:  UIScreen.main.bounds.height)
-                case .left:  splashOffset = CGSize(width: -UIScreen.main.bounds.width,  height: 0)
-                case .right: splashOffset = CGSize(width:  UIScreen.main.bounds.width,  height: 0)
+                case .up:    splashOffset = CGSize(width: 0, height: -screen.height)
+                case .down:  splashOffset = CGSize(width: 0, height:  screen.height)
+                case .left:  splashOffset = CGSize(width: -screen.width,  height: 0)
+                case .right: splashOffset = CGSize(width:  screen.width,  height: 0)
                 }
             }
         }

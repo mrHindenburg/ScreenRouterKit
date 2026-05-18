@@ -95,6 +95,10 @@ final class SRKFlowCoordinator {
         if let provider = config.extraInstallFieldsProvider {
             let fields = provider()
             SRKLogger.logKey(.appsFields, "fields=\(fields)")
+            if let appsInfo = fields["appsInfo"] as? [String: Any],
+               let afStatus = appsInfo["af_status"] as? String {
+                SRKLogger.logKey(.installType, "af_status=\(afStatus)")
+            }
         }
 
         SRKLogger.log(.debug, "Coordinator: step 6 — /install + splash in parallel")
@@ -202,28 +206,30 @@ final class SRKFlowCoordinator {
         let monitor = NWPathMonitor()
         let queue   = DispatchQueue(label: "wbc.network.check")
 
-        return await withCheckedContinuation { continuation in
-            var resumed = false
-
+        let stream = AsyncStream(Bool.self) { cont in
             monitor.pathUpdateHandler = { path in
-                guard !resumed else { return }
-                resumed = true
-                monitor.cancel()
-                let ok = (path.status == .satisfied)
-                SRKLogger.log(.debug, "Coordinator: connected=\(ok)")
-                continuation.resume(returning: ok)
+                cont.yield(path.status == .satisfied)
+                cont.finish()
             }
-
+            cont.onTermination = { _ in monitor.cancel() }
             monitor.start(queue: queue)
+        }
 
-            Task {
-                try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
-                guard !resumed else { return }
-                resumed = true
-                monitor.cancel()
-                SRKLogger.log(.warning, "Coordinator: network timeout")
-                continuation.resume(returning: false)
+        return await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                for await connected in stream { return connected }
+                return false
             }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(timeoutSeconds))
+                guard !Task.isCancelled else { return false }
+                SRKLogger.log(.warning, "Coordinator: network timeout")
+                return false
+            }
+            let result = await group.next() ?? false
+            group.cancelAll()
+            SRKLogger.log(.debug, "Coordinator: connected=\(result)")
+            return result
         }
     }
 
@@ -233,6 +239,7 @@ final class SRKFlowCoordinator {
            !idfa.isEmpty,
            idfa != "00000000-0000-0000-0000-000000000000" {
             SRKLogger.log(.debug, "Coordinator: using IDFA")
+            SRKLogger.logKey(.idfa, "idfa=\(idfa)")
             return idfa
         }
 

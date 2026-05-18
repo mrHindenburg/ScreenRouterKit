@@ -9,105 +9,95 @@ public enum SRKATTHandling: Sendable {
 
 public final class SRKATTSignal: @unchecked Sendable {
 
-    private var continuation: CheckedContinuation<Bool, Never>?
     private let lock = NSLock()
-    private var storedResult: Bool?
+    nonisolated(unsafe) private var _result: Bool?
+    nonisolated(unsafe) private var _streamCont: AsyncStream<Bool>.Continuation?
+    private let _stream: AsyncStream<Bool>
 
-    public init() {}
-
-    public func complete(authorized: Bool) {
-        lock.lock()
-        let cont = continuation
-        continuation = nil
-        if cont == nil {
-            storedResult = authorized
-        }
-        lock.unlock()
-        cont?.resume(returning: authorized)
+    public init() {
+        var cont: AsyncStream<Bool>.Continuation!
+        _stream = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont = $0 }
+        _streamCont = cont
     }
 
-    func wait() async -> Bool {
-        lock.lock()
-        if let result = storedResult {
-            lock.unlock()
-            return result
+    public nonisolated func complete(authorized: Bool) {
+        let cont: AsyncStream<Bool>.Continuation? = lock.withLock {
+            guard _result == nil else { return nil }
+            _result = authorized
+            let c = _streamCont
+            _streamCont = nil
+            return c
         }
-        return await withCheckedContinuation { cont in
-            continuation = cont
-            lock.unlock()
-        }
+        cont?.yield(authorized)
+        cont?.finish()
+    }
+
+    nonisolated func wait() async -> Bool {
+        if let r = lock.withLock({ _result }) { return r }
+        for await value in _stream { return value }
+        return lock.withLock { _result ?? false }
     }
 }
 
 public final class SRKSplashSignal: @unchecked Sendable {
 
-    private var continuation: CheckedContinuation<Void, Never>?
     private let lock = NSLock()
-    private var completed = false
+    nonisolated(unsafe) private var _completed = false
+    nonisolated(unsafe) private var _streamCont: AsyncStream<Void>.Continuation?
+    private let _stream: AsyncStream<Void>
 
-    public init() {}
-
-    public func complete() {
-        lock.lock()
-        let cont = continuation
-        completed = true
-        continuation = nil
-        lock.unlock()
-        cont?.resume()
+    public init() {
+        var cont: AsyncStream<Void>.Continuation!
+        _stream = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont = $0 }
+        _streamCont = cont
     }
 
-    func wait() async {
-        lock.lock()
-        let alreadyDone = completed
-        lock.unlock()
-        if alreadyDone { return }
-
-        await withCheckedContinuation { cont in
-            lock.lock()
-            if completed {
-                lock.unlock()
-                cont.resume()
-            } else {
-                continuation = cont
-                lock.unlock()
-            }
+    public nonisolated func complete() {
+        let cont: AsyncStream<Void>.Continuation? = lock.withLock {
+            guard !_completed else { return nil }
+            _completed = true
+            let c = _streamCont
+            _streamCont = nil
+            return c
         }
+        cont?.yield(())
+        cont?.finish()
+    }
+
+    nonisolated func wait() async {
+        if lock.withLock({ _completed }) { return }
+        for await _ in _stream { return }
     }
 }
 
 public final class SRKAppsFlyerSignal: @unchecked Sendable {
 
-    private var continuation: CheckedContinuation<Void, Never>?
     private let lock = NSLock()
-    private var completed = false
+    nonisolated(unsafe) private var _completed = false
+    nonisolated(unsafe) private var _streamCont: AsyncStream<Void>.Continuation?
+    private let _stream: AsyncStream<Void>
 
-    public init() {}
-
-    public func complete() {
-        lock.lock()
-        let cont = continuation
-        completed = true
-        continuation = nil
-        lock.unlock()
-        cont?.resume()
+    public init() {
+        var cont: AsyncStream<Void>.Continuation!
+        _stream = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont = $0 }
+        _streamCont = cont
     }
 
-    func wait() async {
-        lock.lock()
-        let alreadyDone = completed
-        lock.unlock()
-        if alreadyDone { return }
-
-        await withCheckedContinuation { cont in
-            lock.lock()
-            if completed {
-                lock.unlock()
-                cont.resume()
-            } else {
-                continuation = cont
-                lock.unlock()
-            }
+    public nonisolated func complete() {
+        let cont: AsyncStream<Void>.Continuation? = lock.withLock {
+            guard !_completed else { return nil }
+            _completed = true
+            let c = _streamCont
+            _streamCont = nil
+            return c
         }
+        cont?.yield(())
+        cont?.finish()
+    }
+
+    nonisolated func wait() async {
+        if lock.withLock({ _completed }) { return }
+        for await _ in _stream { return }
     }
 }
 
@@ -170,7 +160,7 @@ public struct SRKConfiguration: @unchecked Sendable {
     public init(
         registerURL:                String,
         syncURL:                    String,
-        appId:                   String,
+        appId:                      String,
         attHandling:                SRKATTHandling                  = .managedByLibrary,
         attDelay:                   TimeInterval,
         splash:                     SRKSplashProvider?              = nil,
@@ -185,7 +175,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.launchMode                 = .full(registerURL: registerURL, syncURL: syncURL, appId: appId)
         self.registerURL                = registerURL
         self.syncURL                    = syncURL
-        self.appId                   = appId
+        self.appId                      = appId
         self.attHandling                = attHandling
         self.attDelay                   = attDelay
         self.appsFlyerSignal            = nil

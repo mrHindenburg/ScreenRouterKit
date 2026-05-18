@@ -106,11 +106,14 @@ final class SRKNetworkManager: Sendable {
             }
             if (200...299).contains(http.statusCode) {
                 SRKLogger.log(.info, "Sync: success")
+                SRKLogger.logKey(.syncResult, "status=\(http.statusCode) ok")
             } else {
                 SRKLogger.log(.error, "Sync: server error \(http.statusCode)")
+                SRKLogger.logKey(.syncResult, "status=\(http.statusCode) error")
             }
         } catch {
             SRKLogger.log(.error, "Sync: error — \(error.localizedDescription)")
+            SRKLogger.logKey(.syncResult, "error=\(error.localizedDescription)")
         }
     }
 

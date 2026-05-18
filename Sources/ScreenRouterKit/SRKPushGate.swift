@@ -157,19 +157,11 @@ final class SRKPushGate: Sendable {
 }
 
 final class SRKTokenBox: @unchecked Sendable {
-    private var _value: String?
+    nonisolated(unsafe) private var _value: String?
     private let lock = NSLock()
 
     var value: String? {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return _value
-        }
-        set {
-            lock.lock()
-            defer { lock.unlock() }
-            _value = newValue
-        }
+        get { lock.withLock { _value } }
+        set { lock.withLock { _value = newValue } }
     }
 }

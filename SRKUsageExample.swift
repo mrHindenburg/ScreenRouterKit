@@ -10,65 +10,86 @@ import AppsFlyerLib
 import Firebase
 import FirebaseMessaging
 
-// MARK: - 1. Simple Mode (без сервера, тільки сплеш + нативний екран)
+// MARK: - AppConstants
+//
+// Єдине місце де зберігаються всі ідентифікатори застосунку.
+// Скопіюйте в окремий AppConstants.swift.
 
-/*
- Використовується коли немає бекенду — тільки сплеш і нативний MainView.
- ATT пропускається (.skip).
- Firebase і push не потрібні.
-*/
+enum AppConstants {
+    static let appId     = "YOUR_APP_ID"            // App Store Connect numeric ID
+    static let afDevKey  = "YOUR_APPSFLYER_DEV_KEY" // AppsFlyer Dev Key (тільки сценарій 4)
+    static let host      = "YOUR_DOMAIN"            // без https://, напр. "api.myapp.com"
+}
+
+// MARK: - Сценарій 1: present() — тільки сплеш + нативний екран, без сервера
+//
+// Коли використовувати: немає бекенду, потрібен лише сплеш перед нативним MainView.
+// AppDelegate не потрібен. Firebase і push не потрібні.
+// ATT пропускається автоматично.
 
 struct SRKExample_SimpleApp: App {
     var body: some Scene {
         WindowGroup {
             ScreenRouterKit.shared.present(
-                transition:  .slideUp,
-                splash: { onComplete in
-                    AnyView(MySplashView(onComplete: onComplete))
+                transition: .slideUp,
+                splash:     { onComplete in
+                    MySplashView(onComplete: onComplete)
                 },
-                mainView: {
-                    AnyView(MyMainView())
-                },
-                debugMode:   .minimal,
-                attHandling: .skip,
-                attDelay:    0
+                mainView:   { MyMainView() },
+                debugMode:  .minimal
             )
         }
     }
 }
 
-// MARK: - 2. Full Mode (з сервером, з Firebase, без AppsFlyer)
+// MARK: - Сценарій 2: start() — сервер без push і без ATT
+//
+// Коли використовувати: є бекенд для вибору маршруту (нативний/веб),
+// але push-сповіщення і ATT не потрібні.
+// AppDelegate не потрібен. Firebase не потрібен.
 
-/*
- Стандартна інтеграція з бекендом і Firebase FCM.
- ATT керується бібліотекою автоматично.
- Важливо: FirebaseAppDelegateProxyEnabled = NO в Info.plist.
-*/
-
-struct SRKExample_FullApp: App {
-    @UIApplicationDelegateAdaptor(SRKExample_FullAppDelegate.self) var appDelegate
-
+struct SRKExample_ServerApp: App {
     var body: some Scene {
         WindowGroup {
             ScreenRouterKit.shared.start(
-                host:        "api.myapp.com",
-                appId:       "com.mycompany.app",
-                splash: { onComplete in
-                    AnyView(MySplashView(onComplete: onComplete))
+                host:      AppConstants.host,
+                appId:     AppConstants.appId,
+                splash:    { onComplete in
+                    MySplashView(onComplete: onComplete)
                 },
-                mainView: {
-                    AnyView(MyMainView())
-                },
-                debugMode:   .minimal,
-                pushEnabled: true,
-                attHandling: .managedByLibrary,
-                attDelay:    1.5
+                mainView:  { MyMainView() },
+                debugMode: .minimal
             )
         }
     }
 }
 
-final class SRKExample_FullAppDelegate: SRKAppDelegate, MessagingDelegate {
+// MARK: - Сценарій 3: startWithPush() — сервер + push + ATT (Firebase FCM, без AppsFlyer)
+//
+// Коли використовувати: є бекенд, потрібні push-сповіщення через Firebase FCM і ATT.
+// AppsFlyer не потрібен.
+// Важливо: FirebaseAppDelegateProxyEnabled = NO в Info.plist.
+
+struct SRKExample_PushApp: App {
+    @UIApplicationDelegateAdaptor(SRKExample_PushAppDelegate.self) var appDelegate
+
+    var body: some Scene {
+        WindowGroup {
+            ScreenRouterKit.shared.startWithPush(
+                host:      AppConstants.host,
+                appId:     AppConstants.appId,
+                splash:    { onComplete in
+                    MySplashView(onComplete: onComplete)
+                },
+                mainView:  { MyMainView() },
+                debugMode: .minimal,
+                attDelay:  1.5  // ATT діалог через 1с (старт) + 1.5с = ~2.5с
+            )
+        }
+    }
+}
+
+final class SRKExample_PushAppDelegate: SRKAppDelegate, MessagingDelegate {
 
     override func firebaseConfigure() {
         FirebaseApp.configure()
@@ -96,21 +117,24 @@ final class SRKExample_FullAppDelegate: SRKAppDelegate, MessagingDelegate {
     }
 }
 
-// MARK: - 3. Full Mode (з сервером, з Firebase, з AppsFlyer)
-
-/*
- Використовується коли потрібен AppsFlyer + ATT + IDFA.
-
- Що SRK робить автоматично (вам НЕ потрібно):
-   - .onOpenURL / .onContinueUserActivity — SRK передає URL в AppsFlyer сам
-   - extraInstallFields — AppsFlyer conversion data збирається і вставляється автоматично
-   - attHandling — ATT завжди управляється через AppDelegate
-
- Обов'язкові кроки:
-   1. appsFlyerEnabled = true  в didFinishLaunchingWithOptions (ДО super)
-   2. ScreenRouterKit.shared._appDelegate = self  (до SwiftUI body)
-   3. super.application(...) обов'язково — запускає Firebase, AppsFlyer, push
-*/
+// MARK: - Сценарій 4: startWithTracking() — сервер + push + ATT + AppsFlyer (повна інтеграція)
+//
+// Коли використовувати: потрібен весь стек — сервер, Firebase FCM, ATT, IDFA і AppsFlyer.
+//
+// AppConstants.appId використовується двічі автоматично:
+//   - AppsFlyerLib.shared().appleAppID = AppConstants.appId  (в AppDelegate)
+//   - appId: AppConstants.appId                              (в startWithTracking)
+// Достатньо змінити один рядок в AppConstants.swift.
+//
+// Що SRK робить автоматично (вам НЕ потрібно робити вручну):
+//   - .onOpenURL / .onContinueUserActivity — SRK передає URL в AppsFlyer сам
+//   - extraInstallFields — AppsFlyer conversion data збирається і вставляється автоматично
+//   - ATT — управляється через AppDelegate
+//
+// Обов'язкові кроки в AppDelegate:
+//   1. appsFlyerEnabled = true            — ДО super.application(...)
+//   2. ScreenRouterKit.shared._appDelegate = self  — ДО super.application(...)
+//   3. super.application(...)             — обов'язково, запускає Firebase, AppsFlyer, push
 
 struct SRKExample_TrackingApp: App {
     @UIApplicationDelegateAdaptor(SRKExample_TrackingAppDelegate.self) var appDelegate
@@ -118,17 +142,12 @@ struct SRKExample_TrackingApp: App {
     var body: some Scene {
         WindowGroup {
             ScreenRouterKit.shared.startWithTracking(
-                host:        "api.myapp.com",
-                appId:       "com.mycompany.app",
-                splash: { onComplete in
-                    AnyView(MySplashView(onComplete: onComplete))
-                },
-                mainView: {
-                    AnyView(MyMainView())
-                },
-                debugMode:   .minimal,
-                pushEnabled: true,
-                attDelay:    2.0   // ATT діалог з'явиться через 1с (старт) + 2с (attDelay) = ~3с
+                host:      AppConstants.host,
+                appId:     AppConstants.appId,
+                splash:    { onComplete in MySplashView(onComplete: onComplete) },
+                mainView:  { MyMainView() },
+                debugMode: .minimal,
+                attDelay:  2.0  // ATT діалог через 1с (старт) + 2с = ~3с
             )
         }
     }
@@ -140,8 +159,8 @@ final class SRKExample_TrackingAppDelegate: SRKAppDelegate, MessagingDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        appsFlyerEnabled = true                      // вмикаємо AppsFlyer ДО super
-        ScreenRouterKit.shared._appDelegate = self   // реєструємо до SwiftUI body
+        appsFlyerEnabled = true                      // обов'язково ДО super
+        ScreenRouterKit.shared._appDelegate = self   // обов'язково ДО super
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
@@ -151,8 +170,8 @@ final class SRKExample_TrackingAppDelegate: SRKAppDelegate, MessagingDelegate {
     }
 
     override func appsFlyerConfigure() {
-        AppsFlyerLib.shared().appsFlyerDevKey = "YOUR_DEV_KEY"
-        AppsFlyerLib.shared().appleAppID      = "YOUR_APP_ID"
+        AppsFlyerLib.shared().appsFlyerDevKey = AppConstants.afDevKey
+        AppsFlyerLib.shared().appleAppID      = AppConstants.appId   // той самий що в startWithTracking
         AppsFlyerLib.shared().delegate        = self
         AppsFlyerLib.shared().waitForATTUserAuthorization(timeoutInterval: 60)
         AppsFlyerLib.shared().start()
@@ -179,22 +198,20 @@ final class SRKExample_TrackingAppDelegate: SRKAppDelegate, MessagingDelegate {
     }
 
     override func attDidComplete(authorized: Bool) {
-        // викликається після того як ATT діалог закрився
-        // authorized == true означає що IDFA доступний
+        // authorized == true — IDFA доступний
     }
 }
 
 extension SRKExample_TrackingAppDelegate: AppsFlyerLibDelegate {
     func onConversionDataSuccess(_ conversionInfo: [AnyHashable: Any]) {
-        // SRK сам зберігає conversion data і завершує сигнал — просто делегуємо
-        onAppsFlyerConversionData(conversionInfo)
+        onAppsFlyerConversionData(conversionInfo) // SRK зберігає і вставляє в /install сам
     }
     func onConversionDataFail(_ error: Error) {
         onAppsFlyerConversionFail()
     }
 }
 
-// MARK: - Placeholder Views (замінити своїми)
+// MARK: - Placeholder Views (суто для прикладу)
 
 private struct MySplashView: View {
     let onComplete: () -> Void

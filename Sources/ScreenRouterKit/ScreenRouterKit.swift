@@ -51,165 +51,136 @@ public final class ScreenRouterKit {
 
     private(set) var splashSignal = SRKSplashSignal()
 
-    public func present(
-        transition: SRKTransitionConfig = .fade,
-        splash: @escaping SRKSplashProvider,
-        mainView: @escaping SRKMainViewProvider,
-        debugMode: SRKDebugMode = .minimal,
-        attHandling: SRKATTHandling,
-        attDelay: TimeInterval,
-        defaultOrientations: UIInterfaceOrientationMask = .portrait,
-        webOrientations: UIInterfaceOrientationMask = .all
-    ) -> some View {
+    // MARK: - Scenario 1: Simple — splash + native view, no server
 
-        mainViewProvider    = mainView
-        transitionConfig    = transition
+    public func present<S: View, M: View>(
+        transition:          SRKTransitionConfig          = .fade,
+        @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
+        @ViewBuilder mainView: @escaping () -> M,
+        debugMode:           SRKDebugMode,
+        attHandling:         SRKATTHandling               = .skip,
+        attDelay:            TimeInterval                 = 0,
+        defaultOrientations: UIInterfaceOrientationMask   = .portrait,
+        webOrientations:     UIInterfaceOrientationMask   = .all
+    ) -> some View {
+        mainViewProvider = { AnyView(mainView()) }
+        transitionConfig = transition
 
         let config = SRKConfiguration(
-            splash:              splash,
+            splash:              { onComplete in AnyView(splash(onComplete)) },
             debugMode:           debugMode,
             attHandling:         attHandling,
             attDelay:            attDelay,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations
         )
-
         configure(config)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.startSimple()
         }
-
         return makeRootView()
     }
 
-    public func start(
-        host: String,
-        appId: String,
-        splash: SRKSplashProvider?,
-        mainView: SRKMainViewProvider?,
-        debugMode: SRKDebugMode = .minimal,
-        pushEnabled: Bool = true,
-        attHandling: SRKATTHandling = .managedByLibrary,
-        attDelay: TimeInterval,
-        fallbackURL: String? = nil,
-        nativeOnly: Bool = false,
-        defaultOrientations: UIInterfaceOrientationMask = .portrait,
-        webOrientations: UIInterfaceOrientationMask = .all
+    // MARK: - Scenario 2: Server registration only — no push, no ATT, no Firebase
+
+    public func start<S: View, M: View>(
+        host:                String,
+        appId:               String,
+        @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
+        @ViewBuilder mainView: @escaping () -> M,
+        debugMode:           SRKDebugMode,
+        transition:          SRKTransitionConfig          = .fade,
+        fallbackURL:         String?                      = nil,
+        nativeOnly:          Bool                         = false,
+        defaultOrientations: UIInterfaceOrientationMask   = .portrait,
+        webOrientations:     UIInterfaceOrientationMask   = .all
     ) -> some View {
+        mainViewProvider = { AnyView(mainView()) }
+        transitionConfig = transition
+
         let base = "https://\(host.trimmingCharacters(in: .init(charactersIn: "/")))"
-        return start(
+        let config = SRKConfiguration(
             registerURL:         "\(base)/v1/public/install",
             syncURL:             "\(base)/v1/public/refresh",
-            appId:            appId,
-            splash:              splash,
-            mainView:            mainView,
+            appId:               appId,
+            attHandling:         .skip,
+            attDelay:            0,
+            splash:              { onComplete in AnyView(splash(onComplete)) },
             debugMode:           debugMode,
-            pushEnabled:         pushEnabled,
-            attHandling:         attHandling,
-            attDelay:            attDelay,
-            fallbackURL:         fallbackURL,
-            nativeOnly:          nativeOnly,
-            defaultOrientations: defaultOrientations,
-            webOrientations:     webOrientations
-        )
-    }
-
-    public func start(
-        registerURL: String,
-        syncURL: String,
-        appId: String,
-        splash: SRKSplashProvider?,
-        mainView: SRKMainViewProvider?,
-        debugMode: SRKDebugMode = .minimal,
-        pushEnabled: Bool = true,
-        attHandling: SRKATTHandling = .managedByLibrary,
-        attDelay: TimeInterval,
-        fallbackURL: String? = nil,
-        nativeOnly: Bool = false,
-        defaultOrientations: UIInterfaceOrientationMask = .portrait,
-        webOrientations: UIInterfaceOrientationMask = .all
-    ) -> some View {
-
-        mainViewProvider = mainView
-
-        let config = SRKConfiguration(
-            registerURL:         registerURL,
-            syncURL:             syncURL,
-            appId:            appId,
-            attHandling:         attHandling,
-            attDelay:            attDelay,
-            splash:              splash,
-            debugMode:           debugMode,
-            pushEnabled:         pushEnabled,
+            pushEnabled:         false,
             fallbackURL:         fallbackURL,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations,
             nativeOnly:          nativeOnly
         )
-
         configure(config)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.start()
-        }
-
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.start() }
         return makeRootView()
     }
 
-    public func startWithTracking(
-        host: String,
-        appId: String,
-        splash: SRKSplashProvider?,
-        mainView: SRKMainViewProvider?,
-        debugMode: SRKDebugMode = .minimal,
-        pushEnabled: Bool = true,
-        attDelay: TimeInterval,
-        fallbackURL: String? = nil,
-        nativeOnly: Bool = false,
-        defaultOrientations: UIInterfaceOrientationMask = .portrait,
-        webOrientations: UIInterfaceOrientationMask = .all
+    // MARK: - Scenario 3: Server + Firebase push + ATT (no AppsFlyer)
+
+    public func startWithPush<S: View, M: View>(
+        host:                String,
+        appId:               String,
+        @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
+        @ViewBuilder mainView: @escaping () -> M,
+        debugMode:           SRKDebugMode,
+        transition:          SRKTransitionConfig          = .fade,
+        attDelay:            TimeInterval                 = 2.0,
+        fallbackURL:         String?                      = nil,
+        nativeOnly:          Bool                         = false,
+        defaultOrientations: UIInterfaceOrientationMask   = .portrait,
+        webOrientations:     UIInterfaceOrientationMask   = .all
     ) -> some View {
+        mainViewProvider = { AnyView(mainView()) }
+        transitionConfig = transition
+
         let base = "https://\(host.trimmingCharacters(in: .init(charactersIn: "/")))"
-        return startWithTracking(
+        let config = SRKConfiguration(
             registerURL:         "\(base)/v1/public/install",
             syncURL:             "\(base)/v1/public/refresh",
-            appId:            appId,
-            splash:              splash,
-            mainView:            mainView,
-            debugMode:           debugMode,
-            pushEnabled:         pushEnabled,
+            appId:               appId,
+            attHandling:         .managedByLibrary,
             attDelay:            attDelay,
+            splash:              { onComplete in AnyView(splash(onComplete)) },
+            debugMode:           debugMode,
+            pushEnabled:         true,
             fallbackURL:         fallbackURL,
-            nativeOnly:          nativeOnly,
             defaultOrientations: defaultOrientations,
-            webOrientations:     webOrientations
+            webOrientations:     webOrientations,
+            nativeOnly:          nativeOnly
         )
+        configure(config)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.start() }
+        return makeRootView()
     }
 
-    public func startWithTracking(
-        registerURL: String,
-        syncURL: String,
-        appId: String,
-        splash: SRKSplashProvider?,
-        mainView: SRKMainViewProvider?,
-        debugMode: SRKDebugMode = .minimal,
-        pushEnabled: Bool = true,
-        attDelay: TimeInterval,
-        fallbackURL: String? = nil,
-        nativeOnly: Bool = false,
-        defaultOrientations: UIInterfaceOrientationMask = .portrait,
-        webOrientations: UIInterfaceOrientationMask = .all
-    ) -> some View {
+    // MARK: - Scenario 4: Server + Firebase push + ATT + AppsFlyer
 
-        guard !configuredForTracking else {
-            return makeRootView()
-        }
+    public func startWithTracking<S: View, M: View>(
+        host:                String,
+        appId:               String,
+        @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
+        @ViewBuilder mainView: @escaping () -> M,
+        debugMode:           SRKDebugMode,
+        transition:          SRKTransitionConfig          = .fade,
+        attDelay:            TimeInterval                 = 2.0,
+        fallbackURL:         String?                      = nil,
+        nativeOnly:          Bool                         = false,
+        defaultOrientations: UIInterfaceOrientationMask   = .portrait,
+        webOrientations:     UIInterfaceOrientationMask   = .all
+    ) -> some View {
+        guard !configuredForTracking else { return makeRootView() }
         configuredForTracking = true
 
-        mainViewProvider = mainView
+        mainViewProvider = { AnyView(mainView()) }
+        transitionConfig = transition
 
-        let signal = SRKATTSignal()
+        let signal         = SRKATTSignal()
         let appsFlyerSignal = SRKAppsFlyerSignal()
 
         if let delegate = _appDelegate {
@@ -220,32 +191,28 @@ public final class ScreenRouterKit {
             SRKLogger.log(.warning, "startWithTracking: _appDelegate not set yet")
         }
 
+        let base = "https://\(host.trimmingCharacters(in: .init(charactersIn: "/")))"
         let config = SRKConfiguration(
-            registerURL:                registerURL,
-            syncURL:                    syncURL,
-            appId:                   appId,
+            registerURL:                "\(base)/v1/public/install",
+            syncURL:                    "\(base)/v1/public/refresh",
+            appId:                      appId,
             attSignal:                  signal,
             attDelay:                   attDelay,
             appsFlyerSignal:            appsFlyerSignal,
-            appsFlyerIDProvider:        {
-                UserDefaults.standard.string(forKey: "wbc.appsflyer.id")
-            },
-            splash:                     splash,
+            appsFlyerIDProvider:        { UserDefaults.standard.string(forKey: "wbc.appsflyer.id") },
+            splash:                     { onComplete in AnyView(splash(onComplete)) },
             debugMode:                  debugMode,
-            pushEnabled:                pushEnabled,
+            pushEnabled:                true,
             fallbackURL:                fallbackURL,
             defaultOrientations:        defaultOrientations,
             webOrientations:            webOrientations,
             nativeOnly:                 nativeOnly,
             extraInstallFieldsProvider: SRKAppsFlyerFields.shared.extraFields
         )
-
         configure(config)
         SRKAppsFlyerFields.setDebugMode(debugMode == .verbose)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.start()
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.start() }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1 + attDelay) {
             if let delegate = self._appDelegate {
@@ -258,6 +225,8 @@ public final class ScreenRouterKit {
 
         return makeRootView()
     }
+
+    // MARK: - Internal
 
     public func configure(_ config: SRKConfiguration) {
         self.config = config
@@ -316,15 +285,12 @@ public final class ScreenRouterKit {
 
     public func handleFCMToken(_ token: String) {
         guard !token.isEmpty else { return }
-
         let isRefresh = started
-
         if isRefresh {
             SRKLogger.logKey(.fcmRefresh, "fcm_refresh=\(token)")
         } else {
             SRKLogger.logKey(.fcmFirst, "fcm_early=\(token)")
         }
-
         UserDefaults.standard.set(token, forKey: "wbc.fcm.token")
         SRKPushGate.shared.fcmToken = token
         NotificationCenter.default.post(name: .wbcFCMTokenDidUpdate, object: nil,
@@ -351,11 +317,11 @@ public final class ScreenRouterKit {
             "wbc.att.authorized", "wbc.stable.uuid",
             "wbc.device.idfa", "wbc.appsflyer.id"
         ].forEach { UserDefaults.standard.removeObject(forKey: $0) }
-        started                = false
-        configuredForTracking  = false
-        viewModel              = nil
-        mainViewProvider       = nil
-        splashSignal           = SRKSplashSignal()
+        started               = false
+        configuredForTracking = false
+        viewModel             = nil
+        mainViewProvider      = nil
+        splashSignal          = SRKSplashSignal()
     }
 
     private func getOrCreateViewModel() -> SRKRouterViewModel {

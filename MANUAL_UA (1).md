@@ -1,15 +1,99 @@
 # ScreenRouterKit — Інтеграція
 
 Бібліотека показує splash, робить запит до сервера і відкриває WebView або нативний екран.
-Виберіть свій сценарій і вставте код у потрібні файли.
+Виберіть сценарій що відповідає вашому проекту і вставте код у потрібні файли.
 
 ---
 
-## Сценарій A — Firebase + push, без AppsFlyer
+## Огляд сценаріїв
+
+| Сценарій | Метод | Сервер | Push | ATT | AppsFlyer |
+|---|---|:---:|:---:|:---:|:---:|
+| 1 — Тільки нативний | `present()` | — | — | — | — |
+| 2 — Сервер без трекінгу | `start()` | ✅ | — | — | — |
+| 3 — Сервер + push + ATT | `startWithPush()` | ✅ | ✅ | ✅ | — |
+| 4 — Повна інтеграція | `startWithTracking()` | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
-### Крок 1 — `Info.plist`
+## Сценарій 1 — `present()`: тільки сплеш + нативний екран
+
+**Коли використовувати:** немає бекенду, потрібен лише красивий сплеш перед нативним екраном.
+AppDelegate, Firebase і push не потрібні. ATT пропускається автоматично.
+
+### `MyApp.swift`
+
+```swift
+import SwiftUI
+
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ScreenRouterKit.shared.present(
+                transition: .slideUp,
+                splash:     { onComplete in SplashView(onComplete: onComplete) },
+                mainView:   { ContentView() },
+                debugMode:  .disabled  // при проблемах змініть на .verbose для детальних логів
+            )
+        }
+    }
+}
+```
+
+---
+
+## Сценарій 2 — `start()`: сервер без push і без ATT
+
+**Коли використовувати:** є бекенд що визначає маршрут (нативний або WebView), але push-сповіщення і рекламний трекінг не потрібні. AppDelegate і Firebase не потрібні.
+
+### Крок 1 — `AppConstants.swift`
+
+```swift
+enum AppConstants {
+    static let appId = "YOUR_APP_ID"  // App Store Connect numeric ID
+    static let host  = "YOUR_DOMAIN"  // без https://, напр. "api.myapp.com"
+}
+```
+
+### Крок 2 — `MyApp.swift`
+
+```swift
+import SwiftUI
+
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ScreenRouterKit.shared.start(
+                host:      AppConstants.host,
+                appId:     AppConstants.appId,
+                splash:    { onComplete in SplashView(onComplete: onComplete) },
+                mainView:  { ContentView() },
+                debugMode: .minimal  // при проблемах змініть на .verbose для детальних логів
+            )
+        }
+    }
+}
+```
+
+---
+
+## Сценарій 3 — `startWithPush()`: сервер + push + ATT (Firebase FCM, без AppsFlyer)
+
+**Коли використовувати:** є бекенд, потрібні push-сповіщення через Firebase FCM і діалог ATT.
+AppsFlyer не потрібен. ATT і push бібліотека керує автоматично.
+
+### Крок 1 — `AppConstants.swift`
+
+```swift
+enum AppConstants {
+    static let appId = "YOUR_APP_ID"  // App Store Connect numeric ID
+    static let host  = "YOUR_DOMAIN"  // без https://, напр. "api.myapp.com"
+}
+```
+
+### Крок 2 — `Info.plist`
 
 Відкрийте `Info.plist` як **Source Code** і вставте перед закриваючим `</dict>`:
 
@@ -18,11 +102,9 @@
 <false/>
 ```
 
----
+> Без цього Firebase перехоплює APNs-делегат і push-токени не доходять до бібліотеки.
 
-### Крок 2 — `AppDelegate.swift`
-
-Замініть весь вміст вашого `AppDelegate.swift` на:
+### Крок 3 — `AppDelegate.swift`
 
 ```swift
 import UIKit
@@ -58,35 +140,24 @@ final class AppDelegate: SRKAppDelegate, MessagingDelegate {
 }
 ```
 
----
-
-### Крок 3 — `MyApp.swift` (файл з `@main`)
-
-Замініть вміст `WindowGroup { }` на:
+### Крок 4 — `MyApp.swift`
 
 ```swift
 import SwiftUI
 
 @main
 struct MyApp: App {
-
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
         WindowGroup {
-            ScreenRouterKit.shared.start(
-                host:        "ВАШ_ДОМЕН",          // ← наприклад: "api.myapp.com"
-                appId:       "ВАШ_BUNDLE_ID",      // ← наприклад: "com.company.app"
-                splash: { onComplete in
-                    AnyView(SplashView(onComplete: onComplete))
-                },
-                mainView: {
-                    AnyView(ContentView())
-                },
-                debugMode:   .minimal,
-                pushEnabled: true,
-                attHandling: .managedByLibrary,
-                attDelay:    1.5
+            ScreenRouterKit.shared.startWithPush(
+                host:      AppConstants.host,
+                appId:     AppConstants.appId,
+                splash:    { onComplete in SplashView(onComplete: onComplete) },
+                mainView:  { ContentView() },
+                debugMode: .minimal,  // при проблемах змініть на .verbose для детальних логів
+                attDelay:  1.5  // ATT діалог через 1с (старт) + 1.5с = ~2.5с
             )
         }
     }
@@ -95,26 +166,39 @@ struct MyApp: App {
 
 ---
 
-## Сценарій B — Firebase + push + AppsFlyer
+## Сценарій 4 — `startWithTracking()`: повна інтеграція (Firebase + ATT + AppsFlyer)
 
----
+**Коли використовувати:** потрібен весь стек — сервер, Firebase FCM, ATT, IDFA і AppsFlyer.
 
-### Крок 1 — `Info.plist`
+`AppConstants.appId` використовується в двох місцях автоматично:
+- `AppsFlyerLib.shared().appleAppID = AppConstants.appId` — в `AppDelegate`
+- `appId: AppConstants.appId` — в `startWithTracking`
 
-Відкрийте `Info.plist` як **Source Code** і вставте перед закриваючим `</dict>`:
+Достатньо змінити один рядок щоб оновити обидва.
+
+**Що SRK робить автоматично (вам НЕ потрібно робити вручну):**
+- `.onOpenURL` / `.onContinueUserActivity` — SRK сам передає URL в AppsFlyer
+- `extraInstallFields` — AppsFlyer conversion data збирається і вставляється в запит автоматично
+- ATT — управляється через AppDelegate, `appsFlyerEnabled = true` достатньо
+
+### Крок 1 — `AppConstants.swift`
+
+```swift
+enum AppConstants {
+    static let appId    = "YOUR_APP_ID"             // App Store Connect numeric ID
+    static let afDevKey = "YOUR_APPSFLYER_DEV_KEY"  // AppsFlyer Dev Key
+    static let host     = "YOUR_DOMAIN"             // без https://, напр. "api.myapp.com"
+}
+```
+
+### Крок 2 — `Info.plist`
 
 ```xml
 <key>FirebaseAppDelegateProxyEnabled</key>
 <false/>
 ```
 
-> Потрібно для обох сценаріїв — без цього Firebase конфліктує з APNs і push не працюватимуть.
-
----
-
-### Крок 2 — `AppDelegate.swift`
-
-Замініть весь вміст вашого `AppDelegate.swift` на:
+### Крок 3 — `AppDelegate.swift`
 
 ```swift
 import UIKit
@@ -128,8 +212,8 @@ final class AppDelegate: SRKAppDelegate, MessagingDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        appsFlyerEnabled = true                    // ← обов'язково ДО super
-        ScreenRouterKit.shared._appDelegate = self // ← обов'язково ДО super
+        appsFlyerEnabled = true                      // ← обов'язково ДО super
+        ScreenRouterKit.shared._appDelegate = self   // ← обов'язково ДО super
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
@@ -139,8 +223,8 @@ final class AppDelegate: SRKAppDelegate, MessagingDelegate {
     }
 
     override func appsFlyerConfigure() {
-        AppsFlyerLib.shared().appsFlyerDevKey = "ВАШ_APPSFLYER_DEV_KEY"  // ← замінити
-        AppsFlyerLib.shared().appleAppID      = "ВАШ_APPLE_APP_ID"       // ← замінити
+        AppsFlyerLib.shared().appsFlyerDevKey = AppConstants.afDevKey
+        AppsFlyerLib.shared().appleAppID      = AppConstants.appId   // той самий що в startWithTracking
         AppsFlyerLib.shared().delegate        = self
         AppsFlyerLib.shared().waitForATTUserAuthorization(timeoutInterval: 60)
         AppsFlyerLib.shared().start()
@@ -167,7 +251,7 @@ final class AppDelegate: SRKAppDelegate, MessagingDelegate {
     }
 
     override func attDidComplete(authorized: Bool) {
-        // authorized == true — користувач дозволив відстеження (IDFA доступний)
+        // authorized == true — користувач дозволив відстеження, IDFA доступний
     }
 }
 
@@ -181,32 +265,24 @@ extension AppDelegate: AppsFlyerLibDelegate {
 }
 ```
 
----
-
-### Крок 3 — `MyApp.swift` (файл з `@main`)
+### Крок 4 — `MyApp.swift`
 
 ```swift
 import SwiftUI
 
 @main
 struct MyApp: App {
-
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
         WindowGroup {
             ScreenRouterKit.shared.startWithTracking(
-                host:        "ВАШ_ДОМЕН",          // ← наприклад: "api.myapp.com"
-                appId:       "ВАШ_BUNDLE_ID",      // ← наприклад: "com.company.app"
-                splash: { onComplete in
-                    AnyView(SplashView(onComplete: onComplete))
-                },
-                mainView: {
-                    AnyView(ContentView())
-                },
-                debugMode:   .minimal,
-                pushEnabled: true,
-                attDelay:    2.0   // ATT діалог з'явиться через ~3с після старту
+                host:      AppConstants.host,
+                appId:     AppConstants.appId,   // той самий що AppsFlyerLib.shared().appleAppID
+                splash:    { onComplete in SplashView(onComplete: onComplete) },
+                mainView:  { ContentView() },
+                debugMode: .minimal,  // при проблемах змініть на .verbose для детальних логів
+                attDelay:  2.0  // ATT діалог через 1с (старт) + 2с = ~3с
             )
         }
     }
@@ -317,35 +393,40 @@ struct SplashView: View {
 
 ## Довідка по параметрах
 
-### `host` і `appId`
+### Обов'язкові параметри
 
-```swift
-host:  "api.myapp.com"      // домен без https:// — бібліотека побудує URL сама
-appId: "com.company.app"    // Bundle ID застосунку
-```
+| Параметр | Сценарій |
+|---|---|
+| `host` | 2, 3, 4 |
+| `appId` | 2, 3, 4 |
+| `splash` | всі |
+| `mainView` | всі |
 
-Якщо API нестандартне — використовуйте `registerURL:` і `syncURL:` напряму замість `host:`.
+### `AppConstants`
+
+| Поле | Сц. 1 | Сц. 2 | Сц. 3 | Сц. 4 |
+|---|:---:|:---:|:---:|:---:|
+| `appId` | — | ✅ | ✅ | ✅ |
+| `host` | — | ✅ | ✅ | ✅ |
+| `afDevKey` | — | — | — | ✅ |
+
+`AppConstants.appId` — числовий ID застосунку з App Store Connect.
+В Сценарії 4 він використовується одночасно в `appleAppID` (AppsFlyer) і в `appId:` (SRK).
+
+Якщо API нестандартне — замість `host:` використовуйте `registerURL:` і `syncURL:` напряму у `SRKConfiguration`.
 
 ---
 
 ### `attDelay`
 
 Затримка в секундах перед показом системного ATT-діалогу. Передайте `0` щоб показати одразу.
+Доступно в `present()`, `startWithPush()` і `startWithTracking()`.
 
 ```swift
-attDelay: 2.0  // у start()            → ATT через 2с
-               // у startWithTracking() → ATT через 1с (старт) + 2с = ~3с
+attDelay: 2.0
+// startWithPush / startWithTracking: ATT через 1с (внутрішній старт) + 2с = ~3с
+// present: ATT через attDelay секунд
 ```
-
----
-
-### `attHandling` (тільки для `start`, не для `startWithTracking`)
-
-| Значення | Коли використовувати |
-|---|---|
-| `.managedByLibrary` | Бібліотека сама показує ATT діалог — стандарт |
-| `.skip` | Без ATT — якщо застосунок не використовує рекламу |
-| `.managedByHost(signal:)` | Ви самі показуєте ATT і сигналізуєте через `signal.complete(authorized:)` |
 
 ---
 
@@ -354,24 +435,31 @@ attDelay: 2.0  // у start()            → ATT через 2с
 | Значення | Що виводить у консоль |
 |---|---|
 | `.disabled` | Нічого |
-| `.minimal` | `FINAL_URL`, `FCM_FIRST`, `FCM_REFRESH`, `DEVICE_ID`, `APPS_FIELDS`, `ERROR` |
+| `.minimal` | `FINAL_URL`, `FCM_FIRST`, `FCM_REFRESH`, `DEVICE_ID`, `IDFA`, `AF_INSTALL_TYPE`, `APPS_FIELDS`, `SYNC_RESULT`, `ERROR` |
 | `.verbose` | Кожен крок роботи бібліотеки |
 
-Під час розробки → `.verbose`. Перед релізом → `.disabled`.
+При проблемах або питаннях → `.verbose`. Перед релізом → `.disabled`.
 
 ---
 
-### `pushEnabled`
+### `transition`
+
+Анімація переходу від splash до основного контенту. Доступна в усіх сценаріях.
 
 ```swift
-pushEnabled: false  // не показувати системний діалог push і не реєструватись
+transition: .fade       // за замовчуванням
+transition: .slideUp
+transition: .slideDown
+transition: .scale
+transition: .custom(type: .slide(.left), animation: .spring(duration: 0.4))
 ```
 
 ---
 
 ### `fallbackURL`
 
-Резервна URL якщо сервер недоступний при повторних запусках, але маршрут "web" вже збережений.
+Резервна URL якщо сервер недоступний, але маршрут "web" вже збережений з попереднього запуску.
+Доступна в сценаріях 2, 3, 4.
 
 ```swift
 fallbackURL: "https://myapp.com"
@@ -388,20 +476,6 @@ nativeOnly: true  // завжди показувати нативний екра
 
 ---
 
-### `transition`
-
-Анімація переходу від splash до основного контенту.
-
-```swift
-transition: .fade      // за замовчуванням
-transition: .slideUp
-transition: .slideDown
-transition: .scale
-transition: .custom(type: .slide(.left), animation: .spring(duration: 0.4))
-```
-
----
-
 ## Типові помилки
 
 | Симптом | Причина | Рішення |
@@ -410,5 +484,5 @@ transition: .custom(type: .slide(.left), animation: .spring(duration: 0.4))
 | Push не реєструються | Firebase swizzling не вимкнено | Додайте `FirebaseAppDelegateProxyEnabled = NO` у `Info.plist` |
 | `startWithTracking` — `appDelegate not set yet` | `_appDelegate = self` не встановлено до SwiftUI body | Встановіть у `didFinishLaunchingWithOptions` ДО `super` |
 | ATT або AppsFlyer не ініціалізуються | `appsFlyerEnabled = true` відсутній | Додайте `appsFlyerEnabled = true` у `didFinishLaunchingWithOptions` ДО `super` |
-| Білий екран замість нативного | `mainView` повертає пусте View | Передайте `mainView: { AnyView(ContentView()) }` |
+| Білий екран замість нативного | `mainView` повертає пусте View | Переконайтесь що `ContentView()` не порожній |
 | Орієнтація не змінюється у WebView | `AppDelegate` не успадковує `SRKAppDelegate` | Змініть `class AppDelegate: NSObject` на `class AppDelegate: SRKAppDelegate` |
