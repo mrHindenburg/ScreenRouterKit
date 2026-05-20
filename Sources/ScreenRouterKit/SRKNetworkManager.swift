@@ -44,9 +44,9 @@ final class SRKNetworkManager: Sendable {
         }
 
         let id: String = UUID().uuidString
-        var body: [String: String] = [
-            "id": id,
-            "bundle":    config.bundleID,
+        var body: [String: Any] = [
+            "uuid": id,
+            "bundle":    config.appId,
             "fcm_token": fcmToken,
             "device":    deviceID,
         ]
@@ -55,8 +55,12 @@ final class SRKNetworkManager: Sendable {
             body["appsFlyerId"] = appsFlyerID
         }
 
+        if let extra = config.extraInstallFieldsProvider?() {
+            for (k, v) in extra { body[k] = v }
+        }
+
         SRKLogger.log(.network, "Register: POST \(config.registerURL)")
-        SRKLogger.log(.network, "Register: bundle=\(config.bundleID) device=\(deviceID) fcm=\(fcmToken) af=\(appsFlyerID.isEmpty ? "none" : String(appsFlyerID))")
+        SRKLogger.log(.network, "Register: bundle=\(config.appId) device=\(deviceID) fcm=\(fcmToken) af=\(appsFlyerID.isEmpty ? "none" : String(appsFlyerID)) extra=\(config.extraInstallFieldsProvider != nil ? "yes" : "no")")
 
         return await performRequest(url: url, body: body, tag: "Install")
     }
@@ -73,7 +77,7 @@ final class SRKNetworkManager: Sendable {
         }
 
         var body: [String: String] = [
-            "bundle":    config.bundleID,
+            "bundle":    config.appId,
             "fcm_token": fcmToken,
             "device":    deviceID,
         ]
@@ -102,17 +106,20 @@ final class SRKNetworkManager: Sendable {
             }
             if (200...299).contains(http.statusCode) {
                 SRKLogger.log(.info, "Sync: success")
+                SRKLogger.logKey(.syncResult, "status=\(http.statusCode) ok")
             } else {
                 SRKLogger.log(.error, "Sync: server error \(http.statusCode)")
+                SRKLogger.logKey(.syncResult, "status=\(http.statusCode) error")
             }
         } catch {
             SRKLogger.log(.error, "Sync: error — \(error.localizedDescription)")
+            SRKLogger.logKey(.syncResult, "error=\(error.localizedDescription)")
         }
     }
 
     private func performRequest<T: Decodable>(
         url: URL,
-        body: [String: String],
+        body: [String: Any],
         tag: String
     ) async -> Result<T, SRKAPIError> {
 
@@ -122,7 +129,7 @@ final class SRKNetworkManager: Sendable {
         request.timeoutInterval = 15
 
         do {
-            request.httpBody = try JSONEncoder().encode(body)
+            request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         } catch {
             return .failure(.unknown(error))
         }

@@ -5,36 +5,55 @@ public enum SRKDebugMode: Sendable {
 }
 
 enum SRKLogLevel: Sendable {
-    case error
-    case warning
-    case info
-    case debug
-    case network
+    case error, warning, info, debug, network
 
-    var icon: String {
+    nonisolated var icon: String {
         switch self {
-        case .error:   return "❌"
-        case .warning: return "⚠️"
-        case .info:    return "✅"
-        case .debug:   return "🔍"
-        case .network: return "🌐"
+        case .error:   "❌"
+        case .warning: "⚠️"
+        case .info:    "✅"
+        case .debug:   "🔍"
+        case .network: "🌐"
+        }
+    }
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.error, .error), (.warning, .warning), (.info, .info),
+             (.debug, .debug), (.network, .network): true
+        default: false
         }
     }
 }
 
-enum SRKMinimalTag: String {
-    case finalURL   = "FINAL_URL"
-    case fcmFirst   = "FCM_FIRST"
-    case fcmRefresh = "FCM_REFRESH"
-    case deviceID   = "DEVICE_ID"
-    case error      = "ERROR"
+extension SRKLogLevel: Equatable {}
+
+// String raw value removed — synthesised rawValue would be @MainActor.
+// logKey callers use only dot-syntax cases, never string init.
+enum SRKMinimalTag: Sendable {
+    case finalURL, fcmFirst, fcmRefresh, deviceID, appsFields, error
+    case idfa, installType, syncResult
+
+    nonisolated var rawValue: String {
+        switch self {
+        case .finalURL:     "FINAL_URL"
+        case .fcmFirst:     "FCM_FIRST"
+        case .fcmRefresh:   "FCM_REFRESH"
+        case .deviceID:     "DEVICE_ID"
+        case .appsFields:   "APPS_FIELDS"
+        case .error:        "ERROR"
+        case .idfa:         "IDFA"
+        case .installType:  "AF_INSTALL_TYPE"
+        case .syncResult:   "SYNC_RESULT"
+        }
+    }
 }
 
 enum SRKLogger {
 
-    static var mode: SRKDebugMode = .disabled
+    nonisolated(unsafe) static var mode: SRKDebugMode = .disabled
 
-    static func log(
+    nonisolated static func log(
         _ level: SRKLogLevel,
         _ message: String,
         file: String = #fileID
@@ -51,7 +70,7 @@ enum SRKLogger {
         }
     }
 
-    static func logKey(_ tag: SRKMinimalTag, _ message: String, file: String = #fileID) {
+    nonisolated static func logKey(_ tag: SRKMinimalTag, _ message: String, file: String = #fileID) {
         switch mode {
         case .disabled:
             return

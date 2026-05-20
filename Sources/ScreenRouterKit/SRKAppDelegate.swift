@@ -9,6 +9,7 @@ import AdSupport
 
 open class SRKAppDelegate: NSObject, UIApplicationDelegate {
     var attSignal: SRKATTSignal?
+    var appsFlyerSignal: SRKAppsFlyerSignal?
     var appsFlyerEnabled: Bool = false
 
     open func application(
@@ -32,6 +33,15 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
 
     open func attDidComplete(authorized: Bool) {}
 
+    public func onAppsFlyerConversionData(_ data: [AnyHashable: Any]) {
+        SRKAppsFlyerFields.shared.updateConversionData(data)
+        appsFlyerSignal?.complete()
+    }
+
+    public func onAppsFlyerConversionFail() {
+        appsFlyerSignal?.complete()
+    }
+
     func performATTForAppsFlyer() {
         ATTrackingManager.requestTrackingAuthorization { [weak self] status in
             let authorized = (status == .authorized)
@@ -44,7 +54,6 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
 
             if let afClass = NSClassFromString("AppsFlyerLib") as? NSObject.Type {
                 let afInstance = afClass.value(forKeyPath: "shared") as AnyObject
-                _ = afInstance.perform(NSSelectorFromString("start"))
 
                 if let uid = afInstance.perform(NSSelectorFromString("getAppsFlyerUID"))?
                     .takeUnretainedValue() as? String {
@@ -57,6 +66,30 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
             self?.attDidComplete(authorized: authorized)
             self?.attSignal?.complete(authorized: authorized)
         }
+    }
+
+    open func application(
+        _ application: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        SRKLogger.log(.info, "AppDelegate: open URL — \(url)")
+        if appsFlyerEnabled {
+            SRKAppsFlyerFields.handleOpen(url, options: options)
+        }
+        return true
+    }
+
+    open func application(
+        _ application: UIApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+    ) -> Bool {
+        SRKLogger.log(.info, "AppDelegate: continue userActivity — \(userActivity.webpageURL?.absoluteString ?? "no webpageURL")")
+        if appsFlyerEnabled {
+            SRKAppsFlyerFields.continueUserActivity(userActivity)
+        }
+        return true
     }
 
     open func application(
