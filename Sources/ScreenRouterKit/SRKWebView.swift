@@ -16,7 +16,7 @@ struct SRKWebView: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate         = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
-        webView.customUserAgent = RTSConstants.userAgent
+        webView.customUserAgent = SRKConstants.userAgent
 
         navState.webView = webView
 
@@ -50,7 +50,7 @@ struct SRKWebView: UIViewRepresentable {
 
         config.userContentController.addUserScript(
             WKUserScript(
-                source: RTSConstants.injectedScript,
+                source: SRKConstants.injectedScript,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: false
             )
@@ -232,7 +232,7 @@ struct SRKWebView: UIViewRepresentable {
     }
 }
 
-enum RTSConstants {
+enum SRKConstants {
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
     static let injectedScript = """

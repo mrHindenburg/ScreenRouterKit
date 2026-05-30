@@ -1,7 +1,7 @@
 import SwiftUI
 import Combine
 
-public struct SRKTransitionConfig: Sendable {
+nonisolated public struct SRKTransitionConfig: Sendable {
 
     public let animation: Animation
     public let type: SRKTransitionType
@@ -58,8 +58,36 @@ public final class ScreenRouterKit {
         @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
         debugMode:           SRKDebugMode,
-        attHandling:         SRKATTHandling               = .skip,
+        defaultOrientations: UIInterfaceOrientationMask   = .portrait,
+        webOrientations:     UIInterfaceOrientationMask   = .all
+    ) -> some View {
+        mainViewProvider = { AnyView(mainView()) }
+        transitionConfig = transition
+
+        let config = SRKConfiguration(
+            splash:              { onComplete in AnyView(splash(onComplete)) },
+            debugMode:           debugMode,
+            defaultOrientations: defaultOrientations,
+            webOrientations:     webOrientations
+        )
+        configure(config)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.startSimple()
+        }
+        return makeRootView()
+    }
+
+    // MARK: - Scenario 1b: Splash + native view + ATT + push (no server)
+
+    public func presentWithPermissions<S: View, M: View>(
+        transition:          SRKTransitionConfig          = .fade,
+        @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
+        @ViewBuilder mainView: @escaping () -> M,
+        debugMode:           SRKDebugMode,
+        attHandling:         SRKATTHandling               = .managedByLibrary,
         attDelay:            TimeInterval                 = 0,
+        pushEnabled:         Bool                         = true,
         defaultOrientations: UIInterfaceOrientationMask   = .portrait,
         webOrientations:     UIInterfaceOrientationMask   = .all
     ) -> some View {
@@ -71,6 +99,7 @@ public final class ScreenRouterKit {
             debugMode:           debugMode,
             attHandling:         attHandling,
             attDelay:            attDelay,
+            pushEnabled:         pushEnabled,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations
         )
@@ -228,18 +257,18 @@ public final class ScreenRouterKit {
 
     // MARK: - Internal
 
-    public func configure(_ config: SRKConfiguration) {
+    func configure(_ config: SRKConfiguration) {
         self.config = config
         SRKLogger.mode = config.debugMode
         SRKLogger.log(.info, "ScreenRouterKit: configure() appId=\(config.appId)")
     }
 
-    public func makeRootView() -> some View {
+    func makeRootView() -> some View {
         let vm = getOrCreateViewModel()
         return SRKRouterRootView().environmentObject(vm)
     }
 
-    public func start() {
+    func start() {
         guard let config else {
             SRKLogger.log(.error, "ScreenRouterKit: start() called before configure()")
             return
@@ -269,11 +298,17 @@ public final class ScreenRouterKit {
             let attAuthorized = await attGate.requestIfNeeded()
             UserDefaults.standard.set(attAuthorized, forKey: "wbc.att.authorized")
             SRKLogger.log(.info, "ScreenRouterKit: startSimple — ATT authorized=\(attAuthorized)")
+
+            if config.pushEnabled {
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                await SRKPushGate.shared.requestPermissionOnly()
+            }
+
             viewModel?.setMain()
         }
     }
 
-    public func handleAPNSToken(_ data: Data) {
+    func handleAPNSToken(_ data: Data) {
         let hex = data.map { String(format: "%02.2hhx", $0) }.joined()
         SRKLogger.log(.info, "ScreenRouterKit: APNs (\(hex)")
         UserDefaults.standard.set(true, forKey: "wbcApnsReady")
@@ -283,7 +318,7 @@ public final class ScreenRouterKit {
                                         userInfo: ["wbc_apns": hex])
     }
 
-    public func handleFCMToken(_ token: String) {
+    func handleFCMToken(_ token: String) {
         guard !token.isEmpty else { return }
         let isRefresh = started
         if isRefresh {
@@ -297,19 +332,19 @@ public final class ScreenRouterKit {
                                         userInfo: ["token": token])
     }
 
-    public var currentOrientations: UIInterfaceOrientationMask {
+    var currentOrientations: UIInterfaceOrientationMask {
         config?.defaultOrientations ?? .portrait
     }
 
-    public var presented: SRKScene {
+    var presented: SRKScene {
         viewModel?.presented ?? .loading
     }
 
-    public var presentedPublisher: Published<SRKScene>.Publisher? {
+    var presentedPublisher: Published<SRKScene>.Publisher? {
         viewModel?.$presented
     }
 
-    public func reset() {
+    func reset() {
         SRKLogger.log(.info, "ScreenRouterKit: reset()")
         [
             "wbc.flow.lock", "wbc.flow.url",

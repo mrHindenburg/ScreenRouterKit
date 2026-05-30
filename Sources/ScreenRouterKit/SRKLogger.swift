@@ -63,10 +63,10 @@ enum SRKLogger {
             return
         case .minimal:
             guard level == .error else { return }
-            print("[RTS] \(level.icon) \(message)")
+            print("[SRK] \(level.icon) \(message)")
         case .verbose:
             let filename = file.split(separator: "/").last.map(String.init) ?? file
-            print("[RTS][\(level.icon)][\(filename)] \(message)")
+            print("[SRK][\(level.icon)][\(filename)] \(message)")
         }
     }
 
@@ -75,10 +75,10 @@ enum SRKLogger {
         case .disabled:
             return
         case .minimal:
-            print("[RTS] [\(tag.rawValue)] \(message)")
+            print("[SRK] [\(tag.rawValue)] \(message)")
         case .verbose:
             let filename = file.split(separator: "/").last.map(String.init) ?? file
-            print("[RTS][🔑][\(filename)][\(tag.rawValue)] \(message)")
+            print("[SRK][🔑][\(filename)][\(tag.rawValue)] \(message)")
         }
     }
 }

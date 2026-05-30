@@ -10,7 +10,7 @@ struct SRKWebContainerView: View {
     let url: String
 
     @StateObject private var navState     = SRKNavigationState()
-    @StateObject private var connectivity = RTSConnectivityMonitor()
+    @StateObject private var connectivity = SRKConnectivityMonitor()
 
     @State private var showAlert    = false
     @State private var alertMessage = ""
@@ -98,7 +98,7 @@ struct SRKWebContainerView: View {
                     : .gray)
         }
         .disabled(!isActive)
-        .buttonStyle(RTSScaleButtonStyle())
+        .buttonStyle(SRKScaleButtonStyle())
     }
 
     private func homeButton(action: @escaping () -> Void) -> some View {
@@ -107,7 +107,7 @@ struct SRKWebContainerView: View {
                 .font(.title2)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
         }
-        .buttonStyle(RTSScaleButtonStyle())
+        .buttonStyle(SRKScaleButtonStyle())
     }
 
     private func reloadOrLoad() {
@@ -144,7 +144,7 @@ struct SRKWebContainerView: View {
     }
 }
 
-struct RTSScaleButtonStyle: ButtonStyle {
+struct SRKScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 1.18 : 1.0)
@@ -152,7 +152,7 @@ struct RTSScaleButtonStyle: ButtonStyle {
     }
 }
 
-final class RTSConnectivityMonitor: ObservableObject {
+final class SRKConnectivityMonitor: ObservableObject {
     @Published private(set) var connected = true
 
     private let monitor = NWPathMonitor()

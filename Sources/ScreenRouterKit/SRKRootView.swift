@@ -31,7 +31,7 @@ final class SRKReadyGate {
     }
 }
 
-public struct SRKRouterRootView: View {
+struct SRKRouterRootView: View {
 
     @EnvironmentObject private var vm: SRKRouterViewModel
 
@@ -42,9 +42,9 @@ public struct SRKRouterRootView: View {
 
     @StateObject private var gate = SRKReadyGateHolder()
 
-    public init() {}
+    init() {}
 
-    public var body: some View {
+    var body: some View {
         ZStack {
             content
 
@@ -148,18 +148,19 @@ private final class SRKReadyGateHolder: ObservableObject {
     let value = SRKReadyGate()
 }
 
-public final class SRKOrientationProxy {
+final class SRKOrientationProxy {
 
-    public static let shared = SRKOrientationProxy()
+    static let shared = SRKOrientationProxy()
     private init() {}
 
-    public func set(_ mask: UIInterfaceOrientationMask) {
+    func set(_ mask: UIInterfaceOrientationMask) {
         if #available(iOS 16.0, *) {
             UIApplication.shared.connectedScenes.forEach { scene in
                 guard let windowScene = scene as? UIWindowScene else { return }
                 windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+                windowScene.keyWindow?.rootViewController?
+                    .setNeedsUpdateOfSupportedInterfaceOrientations()
             }
-            UIViewController.attemptRotationToDeviceOrientation()
         } else {
             let orientation: UIInterfaceOrientation = (
                 mask == .landscapeLeft  ||
@@ -171,3 +172,4 @@ public final class SRKOrientationProxy {
         SRKLogger.log(.debug, "Orientation: \(mask.rawValue)")
     }
 }
+

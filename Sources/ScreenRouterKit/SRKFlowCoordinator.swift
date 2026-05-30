@@ -78,7 +78,7 @@ final class SRKFlowCoordinator {
         let deviceID = resolveDeviceID(attAuthorized: attAuthorized)
         SRKLogger.log(.debug, "Coordinator: deviceID=\(deviceID)")
         SRKLogger.logKey(.deviceID, "device=\(deviceID)")
-        startFCMTokenObserver(deviceID: deviceID) // observ fcm
+        startFCMTokenObserver(deviceID: deviceID)
 
         if config.appsFlyerSignal != nil {
             SRKLogger.log(.debug, "Coordinator: step 5 — waiting for AppsFlyer conversion data")
@@ -183,18 +183,15 @@ final class SRKFlowCoordinator {
             while !Task.isCancelled {
                 let currentFCM = SRKPushGate.shared.fcmToken ?? UserDefaults.standard.string(forKey: "wbc.fcm.token") ?? ""
                 
-                // if tocken here, and new, and install complete
                 let sessionDone = UserDefaults.standard.bool(forKey: sessionDoneKey)
-                
+
                 if sessionDone, !currentFCM.isEmpty, currentFCM != self.lastRefreshFCM, !self.refreshInFlight {
-                    
                     SRKLogger.log(.info, "Coordinator: New stable FCM detected — triggering /sync")
                     await MainActor.run {
                         self.tryRefreshIfNeeded(currentFCM: currentFCM, deviceID: deviceID)
                     }
                 }
-                
-                // check for tocken every sec
+
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }

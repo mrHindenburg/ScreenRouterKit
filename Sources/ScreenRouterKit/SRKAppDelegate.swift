@@ -16,6 +16,7 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        ScreenRouterKit.shared._appDelegate = self
         UNUserNotificationCenter.current().delegate = self
         firebaseConfigure()
         if appsFlyerEnabled {
@@ -32,6 +33,10 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
     open func appsFlyerConfigure() {}
 
     open func attDidComplete(authorized: Bool) {}
+
+    public func didReceiveFCMToken(_ token: String) {
+        ScreenRouterKit.shared.handleFCMToken(token)
+    }
 
     public func onAppsFlyerConversionData(_ data: [AnyHashable: Any]) {
         SRKAppsFlyerFields.shared.updateConversionData(data)

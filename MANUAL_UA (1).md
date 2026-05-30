@@ -10,16 +10,57 @@
 | Сценарій | Метод | Сервер | Push | ATT | AppsFlyer |
 |---|---|:---:|:---:|:---:|:---:|
 | 1 — Тільки нативний | `present()` | — | — | — | — |
+| 1б — Нативний + дозволи | `presentWithPermissions()` | — | ✅ | ✅ | — |
 | 2 — Сервер без трекінгу | `start()` | ✅ | — | — | — |
 | 3 — Сервер + push + ATT | `startWithPush()` | ✅ | ✅ | ✅ | — |
 | 4 — Повна інтеграція | `startWithTracking()` | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
+## Підключення бібліотеки до проєкту
+
+> **Увага:** ScreenRouterKit підключається як локальна папка вихідного коду — **не через Swift Package Manager**. Не додавайте її через `File → Add Package Dependencies` або `Package.swift`. Це не SPM-пакет.
+
+### Крок 1 — Скопіюйте папку `Sources` у ваш проєкт
+
+Перемістіть або скопіюйте папку `ScreenRouterKit/Sources/ScreenRouterKit` до кореня вашого Xcode-проєкту (поруч із `MyApp.xcodeproj`).
+
+```
+MyProject/
+├── MyApp.xcodeproj
+├── MyApp/
+│   ├── ContentView.swift
+│   └── ...
+└── ScreenRouterKit/          ← скопіюйте сюди
+    ├── ScreenRouterKit.swift
+    ├── SRKFlowCoordinator.swift
+    └── ...
+```
+
+### Крок 2 — Додайте файли до таргету в Xcode
+
+1. Відкрийте Xcode → клацніть правою кнопкою на папку вашого проєкту у навігаторі
+2. Оберіть **Add Files to "MyApp"...**
+3. Виберіть папку `ScreenRouterKit` і поставте галочку **Copy items if needed** (якщо ще не скопійовано)
+4. Переконайтеся що **Add to targets** вказує на ваш основний таргет (`MyApp`)
+5. Натисніть **Add**
+
+### Крок 3 — Перевірте Target Membership
+
+Виберіть будь-який файл бібліотеки у навігаторі → у правій панелі **File Inspector** → **Target Membership** — має стояти галочка навпроти вашого таргету.
+
+### Що не треба робити
+
+- Не додавайте через `File → Add Package Dependencies` — бібліотека не є SPM-пакетом
+- Не додавайте `.xcframework` або `.framework` — це вихідний код, не бінарний фреймворк
+- Не додавайте `Package.swift` до проєкту — він не потрібен для інтеграції
+
+---
+
 ## Сценарій 1 — `present()`: тільки сплеш + нативний екран
 
 **Коли використовувати:** немає бекенду, потрібен лише красивий сплеш перед нативним екраном.
-AppDelegate, Firebase і push не потрібні. ATT пропускається автоматично.
+AppDelegate, Firebase і push не потрібні. ATT не запитується.
 
 ### `MyApp.swift`
 
@@ -40,6 +81,39 @@ struct MyApp: App {
     }
 }
 ```
+
+---
+
+## Сценарій 1б — `presentWithPermissions()`: нативний + ATT + push (без сервера)
+
+**Коли використовувати:** немає бекенду, але потрібні системні дозволи — ATT-діалог і push-нотифікації.
+
+
+### `MyApp.swift`
+
+```swift
+import SwiftUI
+
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ScreenRouterKit.shared.presentWithPermissions(
+                splash:      { onComplete in SplashView(onComplete: onComplete) },
+                mainView:    { ContentView() },
+                debugMode:   .disabled,
+                attHandling: .managedByLibrary,  // за замовчуванням
+                attDelay:    1.5,                // ATT через 0.1с (старт) + 0.6с (після splash) + 1.5с = ~2.2с
+                pushEnabled: true                // за замовчуванням
+            )
+        }
+    }
+}
+```
+
+> Якщо потрібно вимкнути один із дозволів — явно передайте відповідний параметр:
+> - Тільки ATT, без push → `pushEnabled: false`
+> - Тільки push, без ATT → `attHandling: .skip`
 
 ---
 
@@ -122,20 +196,13 @@ final class AppDelegate: SRKAppDelegate, MessagingDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        Messaging.messaging().apnsToken = deviceToken       // спочатку Firebase
-        ScreenRouterKit.shared.handleAPNSToken(deviceToken) // потім бібліотека
-    }
-
-    override func application(
-        _ application: UIApplication,
-        didFailToRegisterForRemoteNotificationsWithError error: Error
-    ) {
-        SRKLogger.log(.error, "APNs error — \(error.localizedDescription)")
+        Messaging.messaging().apnsToken = deviceToken
+        super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
     }
 
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
-        ScreenRouterKit.shared.handleFCMToken(token)
+        didReceiveFCMToken(token)
     }
 }
 ```
@@ -212,8 +279,7 @@ final class AppDelegate: SRKAppDelegate, MessagingDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        appsFlyerEnabled = true                      // ← обов'язково ДО super
-        ScreenRouterKit.shared._appDelegate = self   // ← обов'язково ДО super
+        appsFlyerEnabled = true  // ← обов'язково ДО super
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
@@ -234,20 +300,13 @@ final class AppDelegate: SRKAppDelegate, MessagingDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        Messaging.messaging().apnsToken = deviceToken       // спочатку Firebase
-        ScreenRouterKit.shared.handleAPNSToken(deviceToken) // потім бібліотека
-    }
-
-    override func application(
-        _ application: UIApplication,
-        didFailToRegisterForRemoteNotificationsWithError error: Error
-    ) {
-        SRKLogger.log(.error, "APNs error — \(error.localizedDescription)")
+        Messaging.messaging().apnsToken = deviceToken
+        super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
     }
 
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
-        ScreenRouterKit.shared.handleFCMToken(token)
+        didReceiveFCMToken(token)
     }
 
     override func attDidComplete(authorized: Bool) {
@@ -404,11 +463,11 @@ struct SplashView: View {
 
 ### `AppConstants`
 
-| Поле | Сц. 1 | Сц. 2 | Сц. 3 | Сц. 4 |
-|---|:---:|:---:|:---:|:---:|
-| `appId` | — | ✅ | ✅ | ✅ |
-| `host` | — | ✅ | ✅ | ✅ |
-| `afDevKey` | — | — | — | ✅ |
+| Поле | Сц. 1 | Сц. 1б | Сц. 2 | Сц. 3 | Сц. 4 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| `appId` | — | — | ✅ | ✅ | ✅ |
+| `host` | — | — | ✅ | ✅ | ✅ |
+| `afDevKey` | — | — | — | — | ✅ |
 
 `AppConstants.appId` — числовий ID застосунку з App Store Connect.
 В Сценарії 4 він використовується одночасно в `appleAppID` (AppsFlyer) і в `appId:` (SRK).
@@ -417,15 +476,27 @@ struct SplashView: View {
 
 ---
 
+### `attHandling`
+
+Визначає хто керує запитом ATT. Доступно в `presentWithPermissions()`, `startWithPush()` і `startWithTracking()`.
+
+| Значення | Опис |
+|---|---|
+| `.skip` | ATT не запитується (за замовчуванням для `present()`) |
+| `.managedByLibrary` | ATT запитується автоматично після `attDelay` (за замовчуванням для `presentWithPermissions()`) |
+| `.managedByHost(signal:)` | ATT керується хостом — передайте `SRKATTSignal` і викличте `.complete(authorized:)` вручну |
+
+---
+
 ### `attDelay`
 
 Затримка в секундах перед показом системного ATT-діалогу. Передайте `0` щоб показати одразу.
-Доступно в `present()`, `startWithPush()` і `startWithTracking()`.
+Доступно в `presentWithPermissions()`, `startWithPush()` і `startWithTracking()`.
 
 ```swift
 attDelay: 2.0
-// startWithPush / startWithTracking: ATT через 1с (внутрішній старт) + 2с = ~3с
-// present: ATT через attDelay секунд
+// startWithPush / startWithTracking: ATT через ~1с (мережа + старт) + 2с = ~3с
+// presentWithPermissions: ATT через ~0.7с (старт + splash) + attDelay
 ```
 
 ---
@@ -482,7 +553,6 @@ nativeOnly: true  // завжди показувати нативний екра
 |---|---|---|
 | Splash ніколи не зникає | `onComplete()` не викликається | Переконайтеся що `onComplete()` викликається після анімації або через `asyncAfter` |
 | Push не реєструються | Firebase swizzling не вимкнено | Додайте `FirebaseAppDelegateProxyEnabled = NO` у `Info.plist` |
-| `startWithTracking` — `appDelegate not set yet` | `_appDelegate = self` не встановлено до SwiftUI body | Встановіть у `didFinishLaunchingWithOptions` ДО `super` |
 | ATT або AppsFlyer не ініціалізуються | `appsFlyerEnabled = true` відсутній | Додайте `appsFlyerEnabled = true` у `didFinishLaunchingWithOptions` ДО `super` |
 | Білий екран замість нативного | `mainView` повертає пусте View | Переконайтесь що `ContentView()` не порожній |
 | Орієнтація не змінюється у WebView | `AppDelegate` не успадковує `SRKAppDelegate` | Змініть `class AppDelegate: NSObject` на `class AppDelegate: SRKAppDelegate` |

@@ -53,7 +53,7 @@ enum PreviewURL: String, CaseIterable, Identifiable {
 
 // MARK: - Navigation State Preview
 
-struct WLKNavigationDebugView: View {
+struct SRKNavigationDebugView: View {
 
     @StateObject private var navState = SRKNavigationState()
 
@@ -126,7 +126,7 @@ struct WLKNavigationDebugView: View {
 }
 
 #Preview("Navigation State Debug") {
-    WLKNavigationDebugView()
+    SRKNavigationDebugView()
 }
 
 #Preview("WebView — Google OAuth flow") {

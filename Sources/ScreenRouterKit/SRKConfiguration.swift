@@ -106,14 +106,8 @@ public typealias SRKMainViewProvider  = () -> AnyView
 public typealias SRKAppsFlyerIDProvider = () -> String?
 public typealias SRKExtraInstallFieldsProvider = () -> [String: Any]
 
-public enum SRKLaunchMode: Sendable {
-    case simple
-    case full(registerURL: String, syncURL: String, appId: String)
-}
-
 public struct SRKConfiguration: @unchecked Sendable {
 
-    public let launchMode:                 SRKLaunchMode
     public let registerURL:                String
     public let syncURL:                    String
     public let appId:                   String
@@ -134,21 +128,21 @@ public struct SRKConfiguration: @unchecked Sendable {
         splash:              @escaping SRKSplashProvider,
         debugMode:           SRKDebugMode               = .disabled,
         attHandling:         SRKATTHandling              = .skip,
-        attDelay:            TimeInterval,
+        attDelay:            TimeInterval               = 0,
+        pushEnabled:         Bool                       = false,
         defaultOrientations: UIInterfaceOrientationMask = .portrait,
         webOrientations:     UIInterfaceOrientationMask = .all,
         nativeOnly:          Bool                       = false
     ) {
-        self.launchMode                 = .simple
         self.registerURL                = ""
         self.syncURL                    = ""
-        self.appId                   = ""
+        self.appId                      = ""
         self.attHandling                = attHandling
         self.attDelay                   = attDelay
         self.appsFlyerSignal            = nil
         self.appsFlyerIDProvider        = nil
         self.extraInstallFieldsProvider = nil
-        self.pushEnabled                = false
+        self.pushEnabled                = pushEnabled
         self.fallbackURL                = nil
         self.splashProvider             = splash
         self.debugMode                  = debugMode
@@ -172,7 +166,6 @@ public struct SRKConfiguration: @unchecked Sendable {
         nativeOnly:                 Bool                           = false,
         extraInstallFieldsProvider: SRKExtraInstallFieldsProvider? = nil
     ) {
-        self.launchMode                 = .full(registerURL: registerURL, syncURL: syncURL, appId: appId)
         self.registerURL                = registerURL
         self.syncURL                    = syncURL
         self.appId                      = appId
@@ -193,7 +186,7 @@ public struct SRKConfiguration: @unchecked Sendable {
     public init(
         registerURL:                String,
         syncURL:                    String,
-        appId:                   String,
+        appId:                      String,
         attSignal:                  SRKATTSignal,
         attDelay:                   TimeInterval,
         appsFlyerSignal:            SRKAppsFlyerSignal?             = nil,
@@ -207,10 +200,9 @@ public struct SRKConfiguration: @unchecked Sendable {
         nativeOnly:                 Bool                           = false,
         extraInstallFieldsProvider: SRKExtraInstallFieldsProvider? = nil
     ) {
-        self.launchMode                 = .full(registerURL: registerURL, syncURL: syncURL, appId: appId)
         self.registerURL                = registerURL
         self.syncURL                    = syncURL
-        self.appId                   = appId
+        self.appId                      = appId
         self.attHandling                = .managedByHost(signal: attSignal)
         self.attDelay                   = attDelay
         self.appsFlyerSignal            = appsFlyerSignal
