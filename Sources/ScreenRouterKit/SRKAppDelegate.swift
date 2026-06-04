@@ -1,7 +1,6 @@
 // SRKAppDelegate.swift
 // ScreenRouterKit
 
-import UIKit
 import UserNotifications
 import AppTrackingTransparency
 import AdSupport
@@ -59,11 +58,12 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
 
             if let afClass = NSClassFromString("AppsFlyerLib") as? NSObject.Type {
                 let afInstance = afClass.value(forKeyPath: "shared") as AnyObject
+                let uidSel = NSSelectorFromString("getAppsFlyerUID")
 
-                if let uid = afInstance.perform(NSSelectorFromString("getAppsFlyerUID"))?
-                    .takeUnretainedValue() as? String {
+                if afInstance.responds(to: uidSel),
+                   let uid = afInstance.perform(uidSel)?.takeUnretainedValue() as? String {
                     UserDefaults.standard.set(uid, forKey: "wbc.appsflyer.id")
-                    SRKLogger.log(.info, "AppDelegate: AppsFlyer UID saved")
+                    SRKLogger.af(.info, "AppDelegate: AppsFlyer UID saved")
                 }
             }
 

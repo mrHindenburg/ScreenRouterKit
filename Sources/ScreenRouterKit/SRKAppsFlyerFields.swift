@@ -1,6 +1,6 @@
 import AppTrackingTransparency
-import UIKit
 import AdSupport
+import ObjectiveC
 
 final class SRKAppsFlyerFields {
     static let shared = SRKAppsFlyerFields()
@@ -61,25 +61,44 @@ final class SRKAppsFlyerFields {
     private func appsFlyerUID() -> String? {
         guard let afClass = NSClassFromString("AppsFlyerLib") as? NSObject.Type else { return nil }
         let instance = afClass.value(forKeyPath: "shared") as AnyObject
-        return instance.perform(NSSelectorFromString("getAppsFlyerUID"))?
-            .takeUnretainedValue() as? String
+        let sel = NSSelectorFromString("getAppsFlyerUID")
+        guard instance.responds(to: sel) else { return nil }
+        return instance.perform(sel)?.takeUnretainedValue() as? String
     }
 
     static func handleOpen(_ url: URL, options: [UIApplication.OpenURLOptionsKey: Any]) {
         guard let afClass = NSClassFromString("AppsFlyerLib") as? NSObject.Type else { return }
         let instance = afClass.value(forKeyPath: "shared") as AnyObject
-        _ = instance.perform(NSSelectorFromString("handleOpen:options:"), with: url, with: options as AnyObject)
+        // 7.0.0 selector is `handleOpenUrl:options:` (lowercase "rl"); the old
+        // `handleOpen:options:` does not exist and would crash via perform().
+        let sel = NSSelectorFromString("handleOpenUrl:options:")
+        guard instance.responds(to: sel) else { return }
+        _ = instance.perform(sel, with: url, with: options as AnyObject)
     }
 
     static func continueUserActivity(_ activity: NSUserActivity) {
         guard let afClass = NSClassFromString("AppsFlyerLib") as? NSObject.Type else { return }
         let instance = afClass.value(forKeyPath: "shared") as AnyObject
-        _ = instance.perform(NSSelectorFromString("continueUserActivity:restorationHandler:"), with: activity, with: nil)
+        let sel = NSSelectorFromString("continueUserActivity:restorationHandler:")
+        guard instance.responds(to: sel) else { return }
+        _ = instance.perform(sel, with: activity, with: nil)
     }
 
     static func setDebugMode(_ enabled: Bool) {
-        guard let afClass = NSClassFromString("AppsFlyerLib") as? NSObject.Type,
-              let instance = afClass.value(forKeyPath: "shared") as? NSObject else { return }
-        instance.setValue(NSNumber(value: enabled), forKey: "isDebug")
+        guard let afClass = NSClassFromString("AppsFlyerLib") as? NSObject.Type else { return }
+        let instance = afClass.value(forKeyPath: "shared") as AnyObject
+        guard let cls = object_getClass(instance) else { return }
+
+        // AppsFlyer 7.0.0 declares `isDebug` with a custom setter `-isDebug:`
+        // (older SDKs used the default `-setIsDebug:`). KVC `setValue(_:forKey:"isDebug")`
+        // only ever looks for `setIsDebug:`, so on 7.0.0 it silently misses the setter and
+        // debug logging never turns on. Invoke whichever setter the SDK actually exposes.
+        let candidates = [NSSelectorFromString("isDebug:"), NSSelectorFromString("setIsDebug:")]
+        guard let sel = candidates.first(where: { class_getInstanceMethod(cls, $0) != nil }),
+              let method = class_getInstanceMethod(cls, sel) else { return }
+
+        typealias SetBoolIMP = @convention(c) (AnyObject, Selector, ObjCBool) -> Void
+        let setter = unsafeBitCast(method_getImplementation(method), to: SetBoolIMP.self)
+        setter(instance, sel, ObjCBool(enabled))
     }
 }

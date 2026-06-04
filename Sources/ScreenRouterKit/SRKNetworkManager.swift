@@ -7,7 +7,7 @@ struct SRKSessionResponse: Decodable {
 enum SRKAPIError: LocalizedError {
     case invalidURL
     case invalidResponse
-    case serverError(Int)
+    case serverError(Int, String?)
     case decodingError
     case noNetwork
     case unknown(Error)
@@ -16,7 +16,11 @@ enum SRKAPIError: LocalizedError {
         switch self {
         case .invalidURL:         return "Invalid URL"
         case .invalidResponse:    return "Invalid server response"
-        case .serverError(let c): return "Server error: \(c)"
+        case .serverError(let c, let body):
+            if let body, !body.isEmpty {
+                return "Server error: \(c) — \(body)"
+            }
+            return "Server error: \(c)"
         case .decodingError:      return "Response decoding error"
         case .noNetwork:          return "No internet connection"
         case .unknown(let e):     return e.localizedDescription
@@ -34,7 +38,7 @@ final class SRKNetworkManager: Sendable {
 
     func fetchRegister(
         fcmToken: String,
-        deviceID: String,
+        deviceID: String?,
         appsFlyerID: String
     ) async -> Result<SRKSessionResponse, SRKAPIError> {
 
@@ -48,8 +52,11 @@ final class SRKNetworkManager: Sendable {
             "uuid": id,
             "bundle":    config.appId,
             "fcm_token": fcmToken,
-            "device":    deviceID,
         ]
+
+        if let deviceID, !deviceID.isEmpty {
+            body["device"] = deviceID
+        }
 
         if !appsFlyerID.isEmpty {
             body["appsFlyerId"] = appsFlyerID
@@ -59,15 +66,12 @@ final class SRKNetworkManager: Sendable {
             for (k, v) in extra { body[k] = v }
         }
 
-        SRKLogger.log(.network, "Register: POST \(config.registerURL)")
-        SRKLogger.log(.network, "Register: bundle=\(config.appId) device=\(deviceID) fcm=\(fcmToken) af=\(appsFlyerID.isEmpty ? "none" : String(appsFlyerID)) extra=\(config.extraInstallFieldsProvider != nil ? "yes" : "no")")
-
-        return await performRequest(url: url, body: body, tag: "Install")
+        return await performRequest(url: url, body: body, tag: "INSTALL")
     }
 
     func refresh(
         fcmToken: String,
-        deviceID: String,
+        deviceID: String?,
         appsFlyerID: String
     ) async {
 
@@ -79,14 +83,15 @@ final class SRKNetworkManager: Sendable {
         var body: [String: String] = [
             "bundle":    config.appId,
             "fcm_token": fcmToken,
-            "device":    deviceID,
         ]
+
+        if let deviceID, !deviceID.isEmpty {
+            body["device"] = deviceID
+        }
 
         if !appsFlyerID.isEmpty {
             body["appsFlyerId"] = appsFlyerID
         }
-
-        SRKLogger.log(.network, "Sync: POST \(config.syncURL)")
 
         do {
             var request = URLRequest(url: url)
@@ -97,24 +102,52 @@ final class SRKNetworkManager: Sendable {
 
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                SRKLogger.log(.error, "Sync: invalid response")
+                SRKLogger.log(.error, "Refresh: invalid response")
                 return
             }
-            SRKLogger.log(.network, "Sync: status \(http.statusCode)")
-            if let text = String(data: data, encoding: .utf8) {
-                SRKLogger.log(.network, "Sync: response — \(text)")
-            }
-            if (200...299).contains(http.statusCode) {
-                SRKLogger.log(.info, "Sync: success")
-                SRKLogger.logKey(.syncResult, "status=\(http.statusCode) ok")
-            } else {
-                SRKLogger.log(.error, "Sync: server error \(http.statusCode)")
-                SRKLogger.logKey(.syncResult, "status=\(http.statusCode) error")
+
+            let rows = Self.bodyRows(body as [String: Any])
+            SRKLogger.tableIfChanged("REFRESH", rows, id: "refresh")
+
+            if !(200...299).contains(http.statusCode) {
+                let responseBody = Self.responseBodyString(data)
+                SRKLogger.log(.error, "Refresh: server error \(http.statusCode) — response: \(responseBody ?? "—")")
             }
         } catch {
-            SRKLogger.log(.error, "Sync: error — \(error.localizedDescription)")
-            SRKLogger.logKey(.syncResult, "error=\(error.localizedDescription)")
+            SRKLogger.log(.error, "Refresh: error — \(error.localizedDescription)")
         }
+    }
+
+    /// Builds ordered rows for the INSTALL / REFRESH log tables from a request body.
+    /// The log is intentionally trimmed to a short whitelist; the request body still
+    /// sends everything, only the printed table is reduced.
+    private static func bodyRows(_ body: [String: Any]) -> [(String, String)] {
+        func disp(_ v: Any) -> String {
+            let s = String(describing: v)
+            return s.isEmpty ? "—" : s
+        }
+
+        let appsInfo = body["appsInfo"] as? [String: Any] ?? [:]
+        func value(_ key: String) -> Any? { body[key] ?? appsInfo[key] }
+
+        var rows: [(String, String)] = []
+        for key in ["device", "fcm_token", "af_status", "language", "timezone", "install_time", "idfa"] {
+            if let v = value(key) { rows.append((key, disp(v))) }
+        }
+        if rows.first(where: { $0.0 == "device" }) == nil {
+            rows.insert(("device", "—"), at: 0)
+        }
+        return rows
+    }
+
+    /// Converts a raw error-response body into a printable string for logs / SRKAPIError.
+    private static func responseBodyString(_ data: Data) -> String? {
+        guard !data.isEmpty,
+              let text = String(data: data, encoding: .utf8)?
+                  .trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty
+        else { return nil }
+        return text
     }
 
     private func performRequest<T: Decodable>(
@@ -141,14 +174,12 @@ final class SRKNetworkManager: Sendable {
                 return .failure(.invalidResponse)
             }
 
-            SRKLogger.log(.network, "\(tag): status \(http.statusCode)")
-
-            if let text = String(data: data, encoding: .utf8) {
-                SRKLogger.log(.network, "\(tag): response — \(text)")
-            }
+            SRKLogger.table(tag, Self.bodyRows(body))
 
             guard (200...299).contains(http.statusCode) else {
-                return .failure(.serverError(http.statusCode))
+                let responseBody = Self.responseBodyString(data)
+                SRKLogger.log(.error, "\(tag): server error \(http.statusCode) — response: \(responseBody ?? "—")")
+                return .failure(.serverError(http.statusCode, responseBody))
             }
 
             if http.statusCode == 204 || data.isEmpty {

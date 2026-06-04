@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import AdSupport
 
 enum SRKRoute: String {
     case main
@@ -76,29 +77,19 @@ final class SRKFlowCoordinator {
         }
 
         let deviceID = resolveDeviceID(attAuthorized: attAuthorized)
-        SRKLogger.log(.debug, "Coordinator: deviceID=\(deviceID)")
-        SRKLogger.logKey(.deviceID, "device=\(deviceID)")
+        SRKLogger.log(.debug, "Coordinator: deviceID=\(deviceID ?? "—")")
         startFCMTokenObserver(deviceID: deviceID)
 
         if config.appsFlyerSignal != nil {
-            SRKLogger.log(.debug, "Coordinator: step 5 — waiting for AppsFlyer conversion data")
+            SRKLogger.af(.debug, "Coordinator: step 5 — waiting for AppsFlyer conversion data")
             await waitForAppsFlyerConversionData()
         }
 
         let appsFlyerID = config.appsFlyerIDProvider?() ?? ""
         if appsFlyerID.isEmpty {
-            SRKLogger.log(.debug, "Coordinator: AppsFlyer not connected or UID unavailable")
+            SRKLogger.af(.debug, "Coordinator: AppsFlyer not connected or UID unavailable")
         } else {
-            SRKLogger.log(.info, "Coordinator: appsFlyerID=\(appsFlyerID)")
-        }
-
-        if let provider = config.extraInstallFieldsProvider {
-            let fields = provider()
-            SRKLogger.logKey(.appsFields, "fields=\(fields)")
-            if let appsInfo = fields["appsInfo"] as? [String: Any],
-               let afStatus = appsInfo["af_status"] as? String {
-                SRKLogger.logKey(.installType, "af_status=\(afStatus)")
-            }
+            SRKLogger.af(.info, "Coordinator: appsFlyerID=\(appsFlyerID)")
         }
 
         SRKLogger.log(.debug, "Coordinator: step 6 — /install + splash in parallel")
@@ -113,18 +104,15 @@ final class SRKFlowCoordinator {
         let (result, _) = await (installResult, splashWait)
 
         SRKLogger.log(.debug, "Coordinator: splash done + /install returned — applying route")
-        SRKLogger.logKey(.fcmFirst, "fcm_at_register=(empty by design)")
 
         switch result {
         case .success(let response):
             let raw = response.url.trimmingCharacters(in: .whitespacesAndNewlines)
             SRKLogger.log(.info, "Coordinator: register success — url=\(raw)")
-            let urlLog = raw.isEmpty ? "(empty — will show main)" : raw
-            SRKLogger.logKey(.finalURL, "url=\(urlLog)")
 
-            UserDefaults.standard.set(true,     forKey: sessionDoneKey)
-            UserDefaults.standard.set("",        forKey: sessionFCMKey)
-            UserDefaults.standard.set(deviceID,  forKey: sessionDeviceKey)
+            UserDefaults.standard.set(true,           forKey: sessionDoneKey)
+            UserDefaults.standard.set("",             forKey: sessionFCMKey)
+            UserDefaults.standard.set(deviceID ?? "", forKey: sessionDeviceKey)
 
             if isValidWebURL(raw) {
                 saveAndApply(.web, url: raw)
@@ -135,7 +123,6 @@ final class SRKFlowCoordinator {
 
         case .failure(let error):
             SRKLogger.log(.error, "Coordinator: register error — \(error.localizedDescription)")
-            SRKLogger.logKey(.error, "register failed: \(error.localizedDescription)")
 
             if error == .noNetwork {
                 viewModel?.setMain()
@@ -170,13 +157,13 @@ final class SRKFlowCoordinator {
         }
 
         if signalReceived {
-            SRKLogger.log(.info, "Coordinator: AppsFlyer conversion data received → proceeding to /install")
+            SRKLogger.af(.info, "Coordinator: AppsFlyer conversion data received → proceeding to /install")
         } else {
-            SRKLogger.log(.warning, "Coordinator: AppsFlyer wait timeout (\(timeoutSeconds)s) → /install will go without appsInfo")
+            SRKLogger.af(.warning, "Coordinator: AppsFlyer wait timeout (\(timeoutSeconds)s) → /install will go without appsInfo")
         }
     }
 
-    private func startFCMTokenObserver(deviceID: String) {
+    private func startFCMTokenObserver(deviceID: String?) {
         Task {
             SRKLogger.log(.debug, "Coordinator: Background FCM observer started")
             
@@ -230,22 +217,36 @@ final class SRKFlowCoordinator {
         }
     }
 
-    private func resolveDeviceID(attAuthorized: Bool) -> String {
-        if attAuthorized,
-           let idfa = UserDefaults.standard.string(forKey: "wbc.device.idfa"),
-           !idfa.isEmpty,
-           idfa != "00000000-0000-0000-0000-000000000000" {
-            SRKLogger.log(.debug, "Coordinator: using IDFA")
-            SRKLogger.logKey(.idfa, "idfa=\(idfa)")
-            return idfa
+    private func resolveDeviceID(attAuthorized: Bool) -> String? {
+        if attAuthorized {
+            // Read IDFA directly: the UserDefaults key is only populated in the
+            // AppsFlyer scenario (performATTForAppsFlyer), so .managedByLibrary
+            // flows would otherwise never send a device ID.
+            let idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
+            if idfa != "00000000-0000-0000-0000-000000000000" {
+                UserDefaults.standard.set(idfa, forKey: "wbc.device.idfa")
+                SRKLogger.key("device = IDFA → \(idfa)")
+                return idfa
+            }
+
+            if let cached = UserDefaults.standard.string(forKey: "wbc.device.idfa"),
+               !cached.isEmpty,
+               cached != "00000000-0000-0000-0000-000000000000" {
+                SRKLogger.key("device = cached IDFA → \(cached)")
+                return cached
+            }
         }
 
-        if let existing = UserDefaults.standard.string(forKey: stableUUIDKey) {
+        // No IDFA (ATT denied or zeroed) — fall back to a stable per-install
+        // UUID so the server can always match install ↔ refresh by device.
+        if let existing = UserDefaults.standard.string(forKey: stableUUIDKey),
+           !existing.isEmpty {
+            SRKLogger.key("device = stable UUID (no IDFA) → \(existing)")
             return existing
         }
         let new = UUID().uuidString
         UserDefaults.standard.set(new, forKey: stableUUIDKey)
-        SRKLogger.log(.debug, "Coordinator: new stableUUID generated")
+        SRKLogger.key("device = stable UUID generated (no IDFA) → \(new)")
         return new
     }
 
@@ -286,7 +287,7 @@ final class SRKFlowCoordinator {
         }
     }
 
-    func tryRefreshIfNeeded(currentFCM: String, deviceID: String) {
+    func tryRefreshIfNeeded(currentFCM: String, deviceID: String?) {
         guard !currentFCM.isEmpty else { return }
 
         let sessionDone = UserDefaults.standard.bool(forKey: sessionDoneKey)
@@ -306,7 +307,6 @@ final class SRKFlowCoordinator {
         refreshInFlight = true
         lastRefreshFCM  = currentFCM
         SRKLogger.log(.info, "Sync: new FCM → POST /sync")
-        SRKLogger.logKey(.fcmRefresh, "fcm_refresh=\(currentFCM)")
 
         Task {
             let appsFlyerID = config.appsFlyerIDProvider?() ?? ""
@@ -331,7 +331,7 @@ extension SRKAPIError: Equatable {
              (.invalidResponse, .invalidResponse),
              (.decodingError, .decodingError):
             return true
-        case (.serverError(let a), .serverError(let b)):
+        case (.serverError(let a, _), .serverError(let b, _)):
             return a == b
         default:
             return false

@@ -260,6 +260,7 @@ public final class ScreenRouterKit {
     func configure(_ config: SRKConfiguration) {
         self.config = config
         SRKLogger.mode = config.debugMode
+        SRKLogger.appsFlyerEnabled = config.appsFlyerIDProvider != nil
         SRKLogger.log(.info, "ScreenRouterKit: configure() appId=\(config.appId)")
     }
 
@@ -320,12 +321,7 @@ public final class ScreenRouterKit {
 
     func handleFCMToken(_ token: String) {
         guard !token.isEmpty else { return }
-        let isRefresh = started
-        if isRefresh {
-            SRKLogger.logKey(.fcmRefresh, "fcm_refresh=\(token)")
-        } else {
-            SRKLogger.logKey(.fcmFirst, "fcm_early=\(token)")
-        }
+        SRKLogger.log(.debug, "FCM token \(started ? "refresh" : "early"): \(token)")
         UserDefaults.standard.set(token, forKey: "wbc.fcm.token")
         SRKPushGate.shared.fcmToken = token
         NotificationCenter.default.post(name: .wbcFCMTokenDidUpdate, object: nil,
