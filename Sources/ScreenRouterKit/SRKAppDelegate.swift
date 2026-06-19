@@ -4,6 +4,7 @@
 import UserNotifications
 import AppTrackingTransparency
 import AdSupport
+import UIKit
 
 
 open class SRKAppDelegate: NSObject, UIApplicationDelegate {
@@ -31,7 +32,7 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
 
     open func appsFlyerConfigure() {}
 
-    open func attDidComplete(authorized: Bool) {}
+    nonisolated open func attDidComplete(authorized: Bool) {}
 
     public func didReceiveFCMToken(_ token: String) {
         ScreenRouterKit.shared.handleFCMToken(token)
@@ -47,6 +48,7 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     func performATTForAppsFlyer() {
+        let attSignal = self.attSignal
         ATTrackingManager.requestTrackingAuthorization { [weak self] status in
             let authorized = (status == .authorized)
 
@@ -69,7 +71,7 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
 
             SRKLogger.log(.info, "AppDelegate: ATT completed — authorized=\(authorized)")
             self?.attDidComplete(authorized: authorized)
-            self?.attSignal?.complete(authorized: authorized)
+            attSignal?.complete(authorized: authorized)
         }
     }
 

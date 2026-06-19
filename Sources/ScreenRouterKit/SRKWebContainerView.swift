@@ -2,9 +2,10 @@ import SwiftUI
 import Combine
 import Network
 internal import WebKit
+import StoreKit
 
 struct SRKWebContainerView: View {
-
+    @Environment(\.requestReview) var requestReview
     @Environment(\.colorScheme) private var colorScheme
 
     let url: String
@@ -14,6 +15,7 @@ struct SRKWebContainerView: View {
 
     @State private var showAlert    = false
     @State private var alertMessage = ""
+    @AppStorage("isAskedReview") private var isAskedReview = false
 
     var body: some View {
         ZStack(alignment: .center) {
@@ -23,6 +25,9 @@ struct SRKWebContainerView: View {
                     .onAppear {
                         navState.lastError = nil
                         showAlert = false
+                        if ScreenRouterKit.shared.config?.requestReviewEnabled == true {
+                            presentReview()
+                        }
                     }
 
                 navigationToolbar
@@ -61,6 +66,15 @@ struct SRKWebContainerView: View {
         } message: {
             Text(alertMessage)
         }
+    }
+    
+    private func presentReview() {
+        guard !isAskedReview else { return }
+        Task {
+            try await Task.sleep(for: .seconds(4))
+                requestReview()
+        }
+        isAskedReview = true
     }
 
     private var navigationToolbar: some View {

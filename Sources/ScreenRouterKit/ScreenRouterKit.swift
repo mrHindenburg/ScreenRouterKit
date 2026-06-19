@@ -53,11 +53,11 @@ public final class ScreenRouterKit {
 
     // MARK: - Scenario 1: Simple — splash + native view, no server
 
-    public func present<S: View, M: View>(
+    public func whiteClean<S: View, M: View>(
         transition:          SRKTransitionConfig          = .fade,
         @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:           SRKDebugMode,
+        debugMode:           SRKDebugMode                 = .disabled,
         defaultOrientations: UIInterfaceOrientationMask   = .portrait,
         webOrientations:     UIInterfaceOrientationMask   = .all
     ) -> some View {
@@ -80,13 +80,13 @@ public final class ScreenRouterKit {
 
     // MARK: - Scenario 1b: Splash + native view + ATT + push (no server)
 
-    public func presentWithPermissions<S: View, M: View>(
+    public func whiteWithPermissions<S: View, M: View>(
         transition:          SRKTransitionConfig          = .fade,
         @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:           SRKDebugMode,
+        debugMode:           SRKDebugMode                 = .disabled,
         attHandling:         SRKATTHandling               = .managedByLibrary,
-        attDelay:            TimeInterval                 = 0,
+        attDelay:            TimeInterval,
         pushEnabled:         Bool                         = true,
         defaultOrientations: UIInterfaceOrientationMask   = .portrait,
         webOrientations:     UIInterfaceOrientationMask   = .all
@@ -113,35 +113,37 @@ public final class ScreenRouterKit {
 
     // MARK: - Scenario 2: Server registration only — no push, no ATT, no Firebase
 
-    public func start<S: View, M: View>(
-        host:                String,
-        appId:               String,
-        @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
+    public func blackClean<S: View, M: View>(
+        host:                 String,
+        appId:                String,
+        @ViewBuilder splash:  @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:           SRKDebugMode,
-        transition:          SRKTransitionConfig          = .fade,
-        fallbackURL:         String?                      = nil,
-        nativeOnly:          Bool                         = false,
-        defaultOrientations: UIInterfaceOrientationMask   = .portrait,
-        webOrientations:     UIInterfaceOrientationMask   = .all
+        debugMode:            SRKDebugMode,
+        transition:           SRKTransitionConfig          = .fade,
+        fallbackURL:          String?                      = nil,
+        nativeOnly:           Bool                         = false,
+        requestReviewEnabled: Bool                         = false,
+        defaultOrientations:  UIInterfaceOrientationMask   = .portrait,
+        webOrientations:      UIInterfaceOrientationMask   = .all
     ) -> some View {
         mainViewProvider = { AnyView(mainView()) }
         transitionConfig = transition
 
         let base = "https://\(host.trimmingCharacters(in: .init(charactersIn: "/")))"
         let config = SRKConfiguration(
-            registerURL:         "\(base)/v1/public/install",
-            syncURL:             "\(base)/v1/public/refresh",
-            appId:               appId,
-            attHandling:         .skip,
-            attDelay:            0,
-            splash:              { onComplete in AnyView(splash(onComplete)) },
-            debugMode:           debugMode,
-            pushEnabled:         false,
-            fallbackURL:         fallbackURL,
-            defaultOrientations: defaultOrientations,
-            webOrientations:     webOrientations,
-            nativeOnly:          nativeOnly
+            registerURL:          "\(base)/v1/public/install",
+            syncURL:              "\(base)/v1/public/refresh",
+            appId:                appId,
+            attHandling:          .skip,
+            attDelay:             0,
+            splash:               { onComplete in AnyView(splash(onComplete)) },
+            debugMode:            debugMode,
+            pushEnabled:          false,
+            fallbackURL:          fallbackURL,
+            defaultOrientations:  defaultOrientations,
+            webOrientations:      webOrientations,
+            nativeOnly:           nativeOnly,
+            requestReviewEnabled: requestReviewEnabled
         )
         configure(config)
 
@@ -151,36 +153,38 @@ public final class ScreenRouterKit {
 
     // MARK: - Scenario 3: Server + Firebase push + ATT (no AppsFlyer)
 
-    public func startWithPush<S: View, M: View>(
-        host:                String,
-        appId:               String,
-        @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
+    public func blackWithPermissions<S: View, M: View>(
+        host:                 String,
+        appId:                String,
+        @ViewBuilder splash:  @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:           SRKDebugMode,
-        transition:          SRKTransitionConfig          = .fade,
-        attDelay:            TimeInterval                 = 2.0,
-        fallbackURL:         String?                      = nil,
-        nativeOnly:          Bool                         = false,
-        defaultOrientations: UIInterfaceOrientationMask   = .portrait,
-        webOrientations:     UIInterfaceOrientationMask   = .all
+        debugMode:            SRKDebugMode,
+        transition:           SRKTransitionConfig          = .fade,
+        attDelay:             TimeInterval                 = 2.0,
+        fallbackURL:          String?                      = nil,
+        nativeOnly:           Bool                         = false,
+        requestReviewEnabled: Bool                         = false,
+        defaultOrientations:  UIInterfaceOrientationMask   = .portrait,
+        webOrientations:      UIInterfaceOrientationMask   = .all
     ) -> some View {
         mainViewProvider = { AnyView(mainView()) }
         transitionConfig = transition
 
         let base = "https://\(host.trimmingCharacters(in: .init(charactersIn: "/")))"
         let config = SRKConfiguration(
-            registerURL:         "\(base)/v1/public/install",
-            syncURL:             "\(base)/v1/public/refresh",
-            appId:               appId,
-            attHandling:         .managedByLibrary,
-            attDelay:            attDelay,
-            splash:              { onComplete in AnyView(splash(onComplete)) },
-            debugMode:           debugMode,
-            pushEnabled:         true,
-            fallbackURL:         fallbackURL,
-            defaultOrientations: defaultOrientations,
-            webOrientations:     webOrientations,
-            nativeOnly:          nativeOnly
+            registerURL:          "\(base)/v1/public/install",
+            syncURL:              "\(base)/v1/public/refresh",
+            appId:                appId,
+            attHandling:          .managedByLibrary,
+            attDelay:             attDelay,
+            splash:               { onComplete in AnyView(splash(onComplete)) },
+            debugMode:            debugMode,
+            pushEnabled:          true,
+            fallbackURL:          fallbackURL,
+            defaultOrientations:  defaultOrientations,
+            webOrientations:      webOrientations,
+            nativeOnly:           nativeOnly,
+            requestReviewEnabled: requestReviewEnabled
         )
         configure(config)
 
@@ -190,18 +194,19 @@ public final class ScreenRouterKit {
 
     // MARK: - Scenario 4: Server + Firebase push + ATT + AppsFlyer
 
-    public func startWithTracking<S: View, M: View>(
-        host:                String,
-        appId:               String,
-        @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
+    public func blackFullIntegration<S: View, M: View>(
+        host:                 String,
+        appId:                String,
+        @ViewBuilder splash:  @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:           SRKDebugMode,
-        transition:          SRKTransitionConfig          = .fade,
-        attDelay:            TimeInterval                 = 2.0,
-        fallbackURL:         String?                      = nil,
-        nativeOnly:          Bool                         = false,
-        defaultOrientations: UIInterfaceOrientationMask   = .portrait,
-        webOrientations:     UIInterfaceOrientationMask   = .all
+        debugMode:            SRKDebugMode,
+        transition:           SRKTransitionConfig          = .fade,
+        attDelay:             TimeInterval                 = 2.0,
+        fallbackURL:          String?                      = nil,
+        nativeOnly:           Bool                         = false,
+        requestReviewEnabled: Bool                         = false,
+        defaultOrientations:  UIInterfaceOrientationMask   = .portrait,
+        webOrientations:      UIInterfaceOrientationMask   = .all
     ) -> some View {
         guard !configuredForTracking else { return makeRootView() }
         configuredForTracking = true
@@ -236,6 +241,7 @@ public final class ScreenRouterKit {
             defaultOrientations:        defaultOrientations,
             webOrientations:            webOrientations,
             nativeOnly:                 nativeOnly,
+            requestReviewEnabled:       requestReviewEnabled,
             extraInstallFieldsProvider: SRKAppsFlyerFields.shared.extraFields
         )
         configure(config)
@@ -256,58 +262,6 @@ public final class ScreenRouterKit {
     }
 
     // MARK: - Internal
-
-    func configure(_ config: SRKConfiguration) {
-        self.config = config
-        SRKLogger.mode = config.debugMode
-        SRKLogger.appsFlyerEnabled = config.appsFlyerIDProvider != nil
-        SRKLogger.log(.info, "ScreenRouterKit: configure() appId=\(config.appId)")
-    }
-
-    func makeRootView() -> some View {
-        let vm = getOrCreateViewModel()
-        return SRKRouterRootView().environmentObject(vm)
-    }
-
-    func start() {
-        guard let config else {
-            SRKLogger.log(.error, "ScreenRouterKit: start() called before configure()")
-            return
-        }
-        guard !started else {
-            SRKLogger.log(.debug, "ScreenRouterKit: start() already called")
-            return
-        }
-        started = true
-        SRKLogger.log(.info, "ScreenRouterKit: start()")
-
-        guard let vm = viewModel else {
-            SRKLogger.log(.error, "ScreenRouterKit: ViewModel not found")
-            return
-        }
-        vm.begin(config: config)
-    }
-
-    func startSimple() {
-        guard let config, !started else { return }
-        started = true
-        SRKLogger.mode = config.debugMode
-        SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
-
-        Task { @MainActor in
-            let attGate = SRKATTGate(handling: config.attHandling, delay: config.attDelay)
-            let attAuthorized = await attGate.requestIfNeeded()
-            UserDefaults.standard.set(attAuthorized, forKey: "wbc.att.authorized")
-            SRKLogger.log(.info, "ScreenRouterKit: startSimple — ATT authorized=\(attAuthorized)")
-
-            if config.pushEnabled {
-                try? await Task.sleep(nanoseconds: 600_000_000)
-                await SRKPushGate.shared.requestPermissionOnly()
-            }
-
-            viewModel?.setMain()
-        }
-    }
 
     func handleAPNSToken(_ data: Data) {
         let hex = data.map { String(format: "%02.2hhx", $0) }.joined()
@@ -331,16 +285,70 @@ public final class ScreenRouterKit {
     var currentOrientations: UIInterfaceOrientationMask {
         config?.defaultOrientations ?? .portrait
     }
-
-    var presented: SRKScene {
+    
+    //MARK: - Private
+    
+    private func configure(_ config: SRKConfiguration) {
+        self.config = config
+        SRKLogger.mode = config.debugMode
+        SRKLogger.appsFlyerEnabled = config.appsFlyerIDProvider != nil
+        SRKLogger.log(.info, "ScreenRouterKit: configure() appId=\(config.appId)")
+    }
+    
+    private func makeRootView() -> some View {
+        let vm = getOrCreateViewModel()
+        return SRKRouterRootView().environmentObject(vm)
+    }
+    
+    private func start() {
+        guard let config else {
+            SRKLogger.log(.error, "ScreenRouterKit: start() called before configure()")
+            return
+        }
+        guard !started else {
+            SRKLogger.log(.debug, "ScreenRouterKit: start() already called")
+            return
+        }
+        started = true
+        SRKLogger.log(.info, "ScreenRouterKit: start()")
+        
+        guard let vm = viewModel else {
+            SRKLogger.log(.error, "ScreenRouterKit: ViewModel not found")
+            return
+        }
+        vm.begin(config: config)
+    }
+    
+    private func startSimple() {
+        guard let config, !started else { return }
+        started = true
+        SRKLogger.mode = config.debugMode
+        SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
+        
+        Task { @MainActor in
+            let attGate = SRKATTGate(handling: config.attHandling, delay: config.attDelay)
+            let attAuthorized = await attGate.requestIfNeeded()
+            UserDefaults.standard.set(attAuthorized, forKey: "wbc.att.authorized")
+            SRKLogger.log(.info, "ScreenRouterKit: startSimple — ATT authorized=\(attAuthorized)")
+            
+            if config.pushEnabled {
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                await SRKPushGate.shared.requestPermissionOnly()
+            }
+            
+            viewModel?.setMain()
+        }
+    }
+    
+    private var presented: SRKScene {
         viewModel?.presented ?? .loading
     }
-
-    var presentedPublisher: Published<SRKScene>.Publisher? {
+    
+    private var presentedPublisher: Published<SRKScene>.Publisher? {
         viewModel?.$presented
     }
-
-    func reset() {
+    
+    private func reset() {
         SRKLogger.log(.info, "ScreenRouterKit: reset()")
         [
             "wbc.flow.lock", "wbc.flow.url",
@@ -354,7 +362,7 @@ public final class ScreenRouterKit {
         mainViewProvider      = nil
         splashSignal          = SRKSplashSignal()
     }
-
+    
     private func getOrCreateViewModel() -> SRKRouterViewModel {
         if let existing = viewModel { return existing }
         let vm = SRKRouterViewModel()

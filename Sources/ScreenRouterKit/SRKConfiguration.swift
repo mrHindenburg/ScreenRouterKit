@@ -122,6 +122,7 @@ public struct SRKConfiguration: @unchecked Sendable {
     public let defaultOrientations:        UIInterfaceOrientationMask
     public let webOrientations:            UIInterfaceOrientationMask
     public let nativeOnly:                 Bool
+    public let requestReviewEnabled:       Bool
 
     public init(
         splash:              @escaping SRKSplashProvider,
@@ -148,6 +149,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.defaultOrientations        = defaultOrientations
         self.webOrientations            = webOrientations
         self.nativeOnly                 = nativeOnly
+        self.requestReviewEnabled       = false
     }
 
     public init(
@@ -163,6 +165,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         defaultOrientations:        UIInterfaceOrientationMask     = .portrait,
         webOrientations:            UIInterfaceOrientationMask     = .all,
         nativeOnly:                 Bool                           = false,
+        requestReviewEnabled:       Bool                           = false,
         extraInstallFieldsProvider: SRKExtraInstallFieldsProvider? = nil
     ) {
         self.registerURL                = registerURL
@@ -180,6 +183,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.defaultOrientations        = defaultOrientations
         self.webOrientations            = webOrientations
         self.nativeOnly                 = nativeOnly
+        self.requestReviewEnabled       = requestReviewEnabled
     }
 
     public init(
@@ -197,6 +201,7 @@ public struct SRKConfiguration: @unchecked Sendable {
         defaultOrientations:        UIInterfaceOrientationMask     = .portrait,
         webOrientations:            UIInterfaceOrientationMask     = .all,
         nativeOnly:                 Bool                           = false,
+        requestReviewEnabled:       Bool                           = false,
         extraInstallFieldsProvider: SRKExtraInstallFieldsProvider? = nil
     ) {
         self.registerURL                = registerURL
@@ -214,5 +219,6 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.defaultOrientations        = defaultOrientations
         self.webOrientations            = webOrientations
         self.nativeOnly                 = nativeOnly
+        self.requestReviewEnabled       = requestReviewEnabled
     }
 }

@@ -96,7 +96,7 @@ struct SRKWebView: UIViewRepresentable {
             self.parent = parent
         }
 
-        func webView(
+        internal func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
@@ -136,17 +136,17 @@ struct SRKWebView: UIViewRepresentable {
             return nil
         }
 
-        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+        internal func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                      initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
             completionHandler()
         }
 
-        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+        internal func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
                      initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
             completionHandler(true)
         }
 
-        func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
+        internal func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
                      defaultText: String?, initiatedByFrame frame: WKFrameInfo,
                      completionHandler: @escaping (String?) -> Void) {
             completionHandler(defaultText)
@@ -194,7 +194,7 @@ struct SRKWebView: UIViewRepresentable {
             if webView.url != nil { webView.reload() }
         }
 
-        func webView(
+        internal func webView(
             _ webView: WKWebView,
             requestMediaCapturePermissionFor origin: WKSecurityOrigin,
             initiatedByFrame frame: WKFrameInfo,

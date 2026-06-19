@@ -1,6 +1,7 @@
 import AppTrackingTransparency
 import AdSupport
 import ObjectiveC
+import UIKit
 
 final class SRKAppsFlyerFields {
     static let shared = SRKAppsFlyerFields()

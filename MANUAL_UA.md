@@ -9,11 +9,11 @@
 
 | Сценарій | Метод | Сервер | Push | ATT | AppsFlyer |
 |---|---|:---:|:---:|:---:|:---:|
-| 1 — Тільки нативний | `present()` | — | — | — | — |
-| 1б — Нативний + дозволи | `presentWithPermissions()` | — | ✅ | ✅ | — |
-| 2 — Сервер без трекінгу | `start()` | ✅ | — | — | — |
-| 3 — Сервер + push + ATT | `startWithPush()` | ✅ | ✅ | ✅ | — |
-| 4 — Повна інтеграція | `startWithTracking()` | ✅ | ✅ | ✅ | ✅ |
+| 1 — Тільки нативний | `whiteClean()` | — | — | — | — |
+| 1б — Нативний + дозволи | `whiteWithPermissions()` | — | ✅ | ✅ | — |
+| 2 — Сервер без трекінгу | `blackClean()` | ✅ | — | — | — |
+| 3 — Сервер + push + ATT | `blackWithPermissions()` | ✅ | ✅ | ✅ | — |
+| 4 — Повна інтеграція | `blackFullIntegration()` | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
@@ -57,7 +57,7 @@ MyProject/
 
 ---
 
-## Сценарій 1 — `present()`: тільки сплеш + нативний екран
+## Сценарій 1 — `whiteClean()`: тільки сплеш + нативний екран
 
 **Коли використовувати:** немає бекенду, потрібен лише красивий сплеш перед нативним екраном.
 AppDelegate, Firebase і push не потрібні. ATT не запитується.
@@ -71,7 +71,7 @@ import SwiftUI
 struct MyApp: App {
     var body: some Scene {
         WindowGroup {
-            ScreenRouterKit.shared.present(
+            ScreenRouterKit.shared.whiteClean(
                 transition: .slideUp,
                 splash:     { onComplete in SplashView(onComplete: onComplete) },
                 mainView:   { ContentView() },
@@ -84,7 +84,7 @@ struct MyApp: App {
 
 ---
 
-## Сценарій 1б — `presentWithPermissions()`: нативний + ATT + push (без сервера)
+## Сценарій 1б — `whiteWithPermissions()`: нативний + ATT + push (без сервера)
 
 **Коли використовувати:** немає бекенду, але потрібні системні дозволи — ATT-діалог і push-нотифікації.
 
@@ -98,7 +98,7 @@ import SwiftUI
 struct MyApp: App {
     var body: some Scene {
         WindowGroup {
-            ScreenRouterKit.shared.presentWithPermissions(
+            ScreenRouterKit.shared.whiteWithPermissions(
                 splash:      { onComplete in SplashView(onComplete: onComplete) },
                 mainView:    { ContentView() },
                 debugMode:   .disabled,
@@ -117,7 +117,7 @@ struct MyApp: App {
 
 ---
 
-## Сценарій 2 — `start()`: сервер без push і без ATT
+## Сценарій 2 — `blackClean()`: сервер без push і без ATT
 
 **Коли використовувати:** є бекенд що визначає маршрут (нативний або WebView), але push-сповіщення і рекламний трекінг не потрібні. AppDelegate і Firebase не потрібні.
 
@@ -139,7 +139,7 @@ import SwiftUI
 struct MyApp: App {
     var body: some Scene {
         WindowGroup {
-            ScreenRouterKit.shared.start(
+            ScreenRouterKit.shared.blackClean(
                 host:      AppConstants.host,
                 appId:     AppConstants.appId,
                 splash:    { onComplete in SplashView(onComplete: onComplete) },
@@ -153,7 +153,7 @@ struct MyApp: App {
 
 ---
 
-## Сценарій 3 — `startWithPush()`: сервер + push + ATT (Firebase FCM, без AppsFlyer)
+## Сценарій 3 — `blackWithPermissions()`: сервер + push + ATT (Firebase FCM, без AppsFlyer)
 
 **Коли використовувати:** є бекенд, потрібні push-сповіщення через Firebase FCM і діалог ATT.
 AppsFlyer не потрібен. ATT і push бібліотека керує автоматично.
@@ -218,7 +218,7 @@ struct MyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ScreenRouterKit.shared.startWithPush(
+            ScreenRouterKit.shared.blackWithPermissions(
                 host:      AppConstants.host,
                 appId:     AppConstants.appId,
                 splash:    { onComplete in SplashView(onComplete: onComplete) },
@@ -233,13 +233,13 @@ struct MyApp: App {
 
 ---
 
-## Сценарій 4 — `startWithTracking()`: повна інтеграція (Firebase + ATT + AppsFlyer)
+## Сценарій 4 — `blackFullIntegration()`: повна інтеграція (Firebase + ATT + AppsFlyer)
 
 **Коли використовувати:** потрібен весь стек — сервер, Firebase FCM, ATT, IDFA і AppsFlyer.
 
 `AppConstants.appId` використовується в двох місцях автоматично:
 - `AppsFlyerLib.shared().appleAppID = AppConstants.appId` — в `AppDelegate`
-- `appId: AppConstants.appId` — в `startWithTracking`
+- `appId: AppConstants.appId` — в `blackFullIntegration`
 
 Достатньо змінити один рядок щоб оновити обидва.
 
@@ -290,7 +290,7 @@ final class AppDelegate: SRKAppDelegate, MessagingDelegate {
 
     override func appsFlyerConfigure() {
         AppsFlyerLib.shared().appsFlyerDevKey = AppConstants.afDevKey
-        AppsFlyerLib.shared().appleAppID      = AppConstants.appId   // той самий що в startWithTracking
+        AppsFlyerLib.shared().appleAppID      = AppConstants.appId   // той самий що в blackFullIntegration
         AppsFlyerLib.shared().delegate        = self
         AppsFlyerLib.shared().waitForATTUserAuthorization(timeoutInterval: 60)
         AppsFlyerLib.shared().start()
@@ -335,7 +335,7 @@ struct MyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ScreenRouterKit.shared.startWithTracking(
+            ScreenRouterKit.shared.blackFullIntegration(
                 host:      AppConstants.host,
                 appId:     AppConstants.appId,   // той самий що AppsFlyerLib.shared().appleAppID
                 splash:    { onComplete in SplashView(onComplete: onComplete) },
@@ -478,12 +478,18 @@ struct SplashView: View {
 
 ### `attHandling`
 
-Визначає хто керує запитом ATT. Доступно в `presentWithPermissions()`, `startWithPush()` і `startWithTracking()`.
+Визначає хто керує запитом ATT. Доступно **тільки** у `whiteWithPermissions()` як явний параметр.
+
+У решті методів ATT-поведінка фіксована:
+- `whiteClean()` — ATT не запитується
+- `blackClean()` — ATT не запитується
+- `blackWithPermissions()` — ATT керує бібліотека (`.managedByLibrary`)
+- `blackFullIntegration()` — ATT керується через AppDelegate і ATT-сигнал (`.managedByHost`)
 
 | Значення | Опис |
 |---|---|
-| `.skip` | ATT не запитується (за замовчуванням для `present()`) |
-| `.managedByLibrary` | ATT запитується автоматично після `attDelay` (за замовчуванням для `presentWithPermissions()`) |
+| `.skip` | ATT не запитується |
+| `.managedByLibrary` | ATT запитується автоматично після `attDelay` (за замовчуванням для `whiteWithPermissions()`) |
 | `.managedByHost(signal:)` | ATT керується хостом — передайте `SRKATTSignal` і викличте `.complete(authorized:)` вручну |
 
 ---
@@ -491,12 +497,24 @@ struct SplashView: View {
 ### `attDelay`
 
 Затримка в секундах перед показом системного ATT-діалогу. Передайте `0` щоб показати одразу.
-Доступно в `presentWithPermissions()`, `startWithPush()` і `startWithTracking()`.
+Доступно в `whiteWithPermissions()`, `blackWithPermissions()` і `blackFullIntegration()`.
+
+| Метод | За замовчуванням | Обов'язковий |
+|---|:---:|:---:|
+| `whiteWithPermissions()` | — | ✅ |
+| `blackWithPermissions()` | `2.0` | — |
+| `blackFullIntegration()` | `2.0` | — |
+
+Якщо вас влаштовує 2 секунди — для `blackWithPermissions` і `blackFullIntegration` параметр можна не передавати. Щоб змінити — вкажіть явно:
 
 ```swift
-attDelay: 2.0
-// startWithPush / startWithTracking: ATT через ~1с (мережа + старт) + 2с = ~3с
-// presentWithPermissions: ATT через ~0.7с (старт + splash) + attDelay
+// blackWithPermissions / blackFullIntegration: ATT через ~1с (мережа + старт) + attDelay
+attDelay: 2.0   // дефолт — ~3с до ATT
+attDelay: 4.0   // більше часу — ~5с до ATT
+attDelay: 0     // одразу після старту — не рекомендовано
+
+// whiteWithPermissions: ATT через ~0.7с (старт + splash) + attDelay
+attDelay: 1.5   // ~2.2с до ATT (обов'язково вказати)
 ```
 
 ---
@@ -547,6 +565,20 @@ nativeOnly: true  // завжди показувати нативний екра
 
 ---
 
+### `requestReviewEnabled`
+
+Керує показом системного діалогу оцінки App Store (StoreKit `requestReview`). Доступно в сценаріях 2, 3, 4. За замовчуванням вимкнено.
+
+```swift
+requestReviewEnabled: true
+```
+
+Якщо `true` — діалог з'являється через 4 секунди після відкриття WebView, але лише один раз за весь термін використання застосунку (контролюється через `@AppStorage("isAskedReview")`). iOS сам вирішує чи показати діалог — передача `true` не гарантує показ, а лише дозволяє бібліотеці зробити запит.
+
+> **За замовчуванням:** `false` — діалог не показується. Щоб увімкнути — передайте явно `requestReviewEnabled: true`.
+
+---
+
 ## Типові помилки
 
 | Симптом | Причина | Рішення |
@@ -556,3 +588,56 @@ nativeOnly: true  // завжди показувати нативний екра
 | ATT або AppsFlyer не ініціалізуються | `appsFlyerEnabled = true` відсутній | Додайте `appsFlyerEnabled = true` у `didFinishLaunchingWithOptions` ДО `super` |
 | Білий екран замість нативного | `mainView` повертає пусте View | Переконайтесь що `ContentView()` не порожній |
 | Орієнтація не змінюється у WebView | `AppDelegate` не успадковує `SRKAppDelegate` | Змініть `class AppDelegate: NSObject` на `class AppDelegate: SRKAppDelegate` |
+
+---
+
+## Діагностика за логами
+
+Увімкніть `debugMode: .verbose` щоб бачити всі повідомлення. У консолі вони мають префікс `[SRK]` з іконкою рівня: `✅` info, `⚠️` warning, `❌` error, `🔑` ключові мілстоуни.
+
+### Маршрутизація
+
+| Повідомлення | Що означає |
+|---|---|
+| `✅ ViewModel: → web(URL)` | Сервер повернув URL — відкривається WebView |
+| `✅ ViewModel: → main` | Відкривається нативний екран |
+| `✅ Coordinator: found lock=web` | Маршрут взято з кешу попереднього запуску — сервер не запитується |
+| `✅ Coordinator: no network → main (no lock)` | Мережа недоступна при першому запуску — показано нативний без збереження маршруту |
+| `✅ Coordinator: nativeOnly=true — suppressing WebView` | `nativeOnly: true` — WebView заблокований, завжди нативний |
+| `⚠️ Coordinator: invalid URL → main` | Сервер повернув рядок що не є валідним `http/https` URL |
+| `⚠️ Coordinator: network timeout` | Мережа не відповіла за 10 секунд |
+
+### ATT і ідентифікатор пристрою
+
+| Повідомлення | Що означає |
+|---|---|
+| `✅ ATT: response — authorized=true/false` | Користувач відповів на ATT-діалог |
+| `✅ ATT: already determined — authorized=...` | Дозвіл вже вирішено раніше — діалог не показувався |
+| `🔑 device = IDFA → ...` | ATT дозволено — IDFA отримано і надіслано на сервер |
+| `🔑 device = stable UUID (no IDFA) → ...` | ATT відхилено або недоступно — використовується анонімний UUID |
+
+### Push і FCM
+
+| Повідомлення | Що означає |
+|---|---|
+| `✅ Push: user responded — granted=true/false` | Результат системного запиту push-дозволу |
+| `✅ Sync: new FCM → POST /sync` | FCM-токен оновився після першого запуску — надсилається на сервер |
+| `⚠️ Push: FCM token not received within ...s — sending empty` | Firebase не надав FCM-токен до відправки `/install` — перевірте `GoogleService-Info.plist` і Firebase SDK |
+| `⚠️ Push: stability timeout — using best available token` | FCM-токен нестабільний — надіслано кращий наявний варіант |
+| `❌ AppDelegate: APNs error — ...` | Реєстрація APNs провалилась — перевірте **Push Notifications** capability і сертифікати в Apple Developer Portal |
+
+### Сервер
+
+| Повідомлення | Що означає |
+|---|---|
+| `✅ Coordinator: register success — url=...` | `/install` виконано — ось URL що відкриється |
+| `❌ server error 4xx/5xx — response: ...` | Сервер повернув помилку — деталі у `response` |
+| `❌ decoding error — ...` | Відповідь сервера не відповідає очікуваному формату JSON |
+
+### Конфігурація
+
+| Повідомлення | Що означає |
+|---|---|
+| `⚠️ AppDelegate: firebaseConfigure() not overridden — Firebase not configured` | Забули `override func firebaseConfigure()` — Firebase не ініціалізований |
+| `⚠️ startWithTracking: _appDelegate not set yet` | `blackFullIntegration` викликаний до того як AppDelegate встиг підключитись до SRK — зазвичай не проблема |
+| `⚠️ startWithTracking asyncAfter: _appDelegate not found` | AppDelegate не знайдено при відправці ATT-запиту — перевірте що `@UIApplicationDelegateAdaptor` оголошений у App struct |
