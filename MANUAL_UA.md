@@ -248,7 +248,11 @@ struct MyApp: App {
 - `extraInstallFields` — AppsFlyer conversion data збирається і вставляється в запит автоматично
 - ATT — управляється через AppDelegate, `appsFlyerEnabled = true` достатньо
 
-### Крок 1 — `AppConstants.swift`
+### Крок 1 — Додайте пакет AppsFlyerLib
+
+При додаванні через SPM вкажіть версію **6.18** — не обирайте "Up to Next Major", бо наступні версії можуть містити несумісні зміни.
+
+### Крок 2 — `AppConstants.swift`
 
 ```swift
 enum AppConstants {
@@ -258,14 +262,14 @@ enum AppConstants {
 }
 ```
 
-### Крок 2 — `Info.plist`
+### Крок 3 — `Info.plist`
 
 ```xml
 <key>FirebaseAppDelegateProxyEnabled</key>
 <false/>
 ```
 
-### Крок 3 — `AppDelegate.swift`
+### Крок 4 — `AppDelegate.swift`
 
 ```swift
 import UIKit
@@ -324,7 +328,7 @@ extension AppDelegate: AppsFlyerLibDelegate {
 }
 ```
 
-### Крок 4 — `MyApp.swift`
+### Крок 5 — `MyApp.swift`
 
 ```swift
 import SwiftUI
