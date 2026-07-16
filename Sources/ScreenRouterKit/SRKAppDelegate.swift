@@ -22,12 +22,10 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
         if appsFlyerEnabled {
             appsFlyerConfigure()
         }
-        SRKLogger.log(.debug, "AppDelegate: didFinishLaunching")
         return true
     }
 
     open func firebaseConfigure() {
-        SRKLogger.log(.warning, "AppDelegate: firebaseConfigure() not overridden — Firebase not configured")
     }
 
     open func appsFlyerConfigure() {}
@@ -55,7 +53,6 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
             if authorized {
                 let idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
                 UserDefaults.standard.set(idfa, forKey: "wbc.device.idfa")
-                SRKLogger.log(.info, "AppDelegate: IDFA saved")
             }
 
             if let afClass = NSClassFromString("AppsFlyerLib") as? NSObject.Type {
@@ -69,7 +66,6 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
                 }
             }
 
-            SRKLogger.log(.info, "AppDelegate: ATT completed — authorized=\(authorized)")
             self?.attDidComplete(authorized: authorized)
             attSignal?.complete(authorized: authorized)
         }
@@ -80,7 +76,6 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
-        SRKLogger.log(.info, "AppDelegate: open URL — \(url)")
         if appsFlyerEnabled {
             SRKAppsFlyerFields.handleOpen(url, options: options)
         }
@@ -91,9 +86,7 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         continue userActivity: NSUserActivity,
         restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
-    ) -> Bool {
-        SRKLogger.log(.info, "AppDelegate: continue userActivity — \(userActivity.webpageURL?.absoluteString ?? "no webpageURL")")
-        if appsFlyerEnabled {
+    ) -> Bool {        if appsFlyerEnabled {
             SRKAppsFlyerFields.continueUserActivity(userActivity)
         }
         return true
@@ -110,7 +103,6 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        SRKLogger.log(.error, "AppDelegate: APNs error — \(error.localizedDescription)")
     }
 
     open func application(

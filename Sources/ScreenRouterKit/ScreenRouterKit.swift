@@ -221,8 +221,6 @@ public final class ScreenRouterKit {
             delegate.attSignal        = signal
             delegate.appsFlyerSignal  = appsFlyerSignal
             delegate.appsFlyerEnabled = true
-        } else {
-            SRKLogger.log(.warning, "startWithTracking: _appDelegate not set yet")
         }
 
         let base = "https://\(host.trimmingCharacters(in: .init(charactersIn: "/")))"
@@ -252,9 +250,6 @@ public final class ScreenRouterKit {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1 + attDelay) {
             if let delegate = self._appDelegate {
                 delegate.performATTForAppsFlyer()
-            } else {
-                SRKLogger.log(.warning, "startWithTracking asyncAfter: _appDelegate not found — completing ATT signal as false")
-                signal.complete(authorized: false)
             }
         }
 
@@ -265,7 +260,6 @@ public final class ScreenRouterKit {
 
     func handleAPNSToken(_ data: Data) {
         let hex = data.map { String(format: "%02.2hhx", $0) }.joined()
-        SRKLogger.log(.info, "ScreenRouterKit: APNs (\(hex)")
         UserDefaults.standard.set(true, forKey: "wbcApnsReady")
         UserDefaults.standard.set(hex,  forKey: "wbcApnsTokenHex")
         SRKPushGate.shared.apnsToken = hex
@@ -275,7 +269,6 @@ public final class ScreenRouterKit {
 
     func handleFCMToken(_ token: String) {
         guard !token.isEmpty else { return }
-        SRKLogger.log(.debug, "FCM token \(started ? "refresh" : "early"): \(token)")
         UserDefaults.standard.set(token, forKey: "wbc.fcm.token")
         SRKPushGate.shared.fcmToken = token
         NotificationCenter.default.post(name: .wbcFCMTokenDidUpdate, object: nil,
@@ -292,7 +285,6 @@ public final class ScreenRouterKit {
         self.config = config
         SRKLogger.mode = config.debugMode
         SRKLogger.appsFlyerEnabled = config.appsFlyerIDProvider != nil
-        SRKLogger.log(.info, "ScreenRouterKit: configure() appId=\(config.appId)")
     }
     
     private func makeRootView() -> some View {
@@ -302,18 +294,14 @@ public final class ScreenRouterKit {
     
     private func start() {
         guard let config else {
-            SRKLogger.log(.error, "ScreenRouterKit: start() called before configure()")
             return
         }
         guard !started else {
-            SRKLogger.log(.debug, "ScreenRouterKit: start() already called")
             return
         }
         started = true
-        SRKLogger.log(.info, "ScreenRouterKit: start()")
         
         guard let vm = viewModel else {
-            SRKLogger.log(.error, "ScreenRouterKit: ViewModel not found")
             return
         }
         vm.begin(config: config)
@@ -323,13 +311,11 @@ public final class ScreenRouterKit {
         guard let config, !started else { return }
         started = true
         SRKLogger.mode = config.debugMode
-        SRKLogger.log(.info, "ScreenRouterKit: startSimple()")
         
         Task { @MainActor in
             let attGate = SRKATTGate(handling: config.attHandling, delay: config.attDelay)
             let attAuthorized = await attGate.requestIfNeeded()
             UserDefaults.standard.set(attAuthorized, forKey: "wbc.att.authorized")
-            SRKLogger.log(.info, "ScreenRouterKit: startSimple — ATT authorized=\(attAuthorized)")
             
             if config.pushEnabled {
                 try? await Task.sleep(nanoseconds: 600_000_000)
@@ -349,7 +335,6 @@ public final class ScreenRouterKit {
     }
     
     private func reset() {
-        SRKLogger.log(.info, "ScreenRouterKit: reset()")
         [
             "wbc.flow.lock", "wbc.flow.url",
             "wbc.session.done", "wbc.session.fcm", "wbc.session.device",

@@ -43,7 +43,6 @@ final class SRKNetworkManager: Sendable {
     ) async -> Result<SRKSessionResponse, SRKAPIError> {
 
         guard let url = URL(string: config.registerURL) else {
-            SRKLogger.log(.error, "Register: invalid registerURL")
             return .failure(.invalidURL)
         }
 
@@ -76,7 +75,6 @@ final class SRKNetworkManager: Sendable {
     ) async {
 
         guard let url = URL(string: config.syncURL) else {
-            SRKLogger.log(.error, "Sync: invalid syncURL")
             return
         }
 
@@ -102,7 +100,6 @@ final class SRKNetworkManager: Sendable {
 
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                SRKLogger.log(.error, "Refresh: invalid response")
                 return
             }
 
@@ -193,7 +190,6 @@ final class SRKNetworkManager: Sendable {
             do {
                 return .success(try JSONDecoder().decode(T.self, from: data))
             } catch {
-                SRKLogger.log(.error, "\(tag): decoding error — \(error)")
                 return .failure(.decodingError)
             }
 

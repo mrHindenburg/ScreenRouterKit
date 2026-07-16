@@ -27,9 +27,7 @@ struct SRKWebView: UIViewRepresentable {
             context.coordinator.homeRequest = request
             navState.homeRequest = request
             webView.load(request)
-            SRKLogger.log(.debug, "WebView: load \(urlString)")
         } else {
-            SRKLogger.log(.error, "WebView: invalid URL — \(urlString)")
         }
 
         return webView
@@ -160,7 +158,6 @@ struct SRKWebView: UIViewRepresentable {
                 }
             }
             updateNavButtons(webView)
-            SRKLogger.log(.debug, "WebView: didStart — \(webView.url?.absoluteString ?? "")")
         }
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
@@ -174,7 +171,6 @@ struct SRKWebView: UIViewRepresentable {
             }
             suppressSpinner = false
             updateNavButtons(webView)
-            SRKLogger.log(.debug, "WebView: didFinish — \(webView.url?.absoluteString ?? "")")
         }
 
         func webView(_ webView: WKWebView,
@@ -190,7 +186,6 @@ struct SRKWebView: UIViewRepresentable {
         }
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-            SRKLogger.log(.warning, "WebView: process terminated — reload")
             if webView.url != nil { webView.reload() }
         }
 
@@ -213,7 +208,6 @@ struct SRKWebView: UIViewRepresentable {
             if let failURL = ns.userInfo[NSURLErrorFailingURLErrorKey] as? URL,
                failURL.host?.contains("onesignal.com") == true { return }
 
-            SRKLogger.log(.error, "WebView: error — \(error.localizedDescription)")
 
             DispatchQueue.main.async {
                 self.parent.navState.isLoading = false

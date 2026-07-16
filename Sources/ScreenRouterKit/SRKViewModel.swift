@@ -24,7 +24,6 @@ final class SRKRouterViewModel: ObservableObject {
     }
 
     func begin(config: SRKConfiguration) {
-        SRKLogger.log(.debug, "ViewModel: begin()")
         SRKLogger.mode = config.debugMode
 
         let coord = SRKFlowCoordinator(config: config)
@@ -34,17 +33,14 @@ final class SRKRouterViewModel: ObservableObject {
     }
 
     func setLoading() {
-        SRKLogger.log(.debug, "ViewModel: → loading")
         presented = .loading
     }
 
     func setMain() {
-        SRKLogger.log(.info, "ViewModel: → main")
         presented = .main
     }
 
     func setWeb(url: String) {
-        SRKLogger.log(.info, "ViewModel: → web(\(url))")
         presented = .web(url: url)
     }
 }

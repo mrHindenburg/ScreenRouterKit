@@ -26,14 +26,12 @@ final class SRKPushGate: Sendable {
 
     func requestPermissionOnly() async {
         guard enabled else {
-            SRKLogger.log(.debug, "Push: skipped (pushEnabled=false)")
             return
         }
         await requestPermission()
         await MainActor.run {
             UIApplication.shared.registerForRemoteNotifications()
         }
-        SRKLogger.log(.debug, "Push: permission requested — token will arrive async")
     }
 
     private func requestPermission() async {
@@ -41,15 +39,12 @@ final class SRKPushGate: Sendable {
         let current = await center.notificationSettings()
 
         guard current.authorizationStatus == .notDetermined else {
-            SRKLogger.log(.debug, "Push: already authorized — status=\(current.authorizationStatus.rawValue)")
             return
         }
 
         do {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-            SRKLogger.log(.info, "Push: user responded — granted=\(granted)")
         } catch {
-            SRKLogger.log(.error, "Push: permission request error — \(error.localizedDescription)")
         }
     }
 
@@ -59,7 +54,6 @@ final class SRKPushGate: Sendable {
         maxWindowSeconds: Double = 8.0
     ) async -> String? {
 
-        SRKLogger.log(.debug, "Push: waiting for stable FCM token (min=\(minWindowSeconds)s, debounce=\(debounceSeconds)s, max=\(maxWindowSeconds)s)")
 
         let start    = Date()
         let deadline = start.addingTimeInterval(maxWindowSeconds)
@@ -70,11 +64,9 @@ final class SRKPushGate: Sendable {
         if let existing = SRKPushGate.shared.fcmToken, !existing.isEmpty {
             latestToken = existing
             lastChange  = Date()
-            SRKLogger.log(.debug, "Push: seeded token from shared: \(existing)")
         } else if let stored = UserDefaults.standard.string(forKey: "wbc.fcm.token"), !stored.isEmpty {
             latestToken = stored
             lastChange  = Date()
-            SRKLogger.log(.debug, "Push: seeded token from UserDefaults")
         }
 
         while latestToken == nil || latestToken!.isEmpty {
@@ -83,14 +75,12 @@ final class SRKPushGate: Sendable {
             if let t = SRKPushGate.shared.fcmToken, !t.isEmpty {
                 latestToken = t
                 lastChange  = Date()
-                SRKLogger.log(.debug, "Push: first token captured from shared")
                 break
             }
 
             if let t = UserDefaults.standard.string(forKey: "wbc.fcm.token"), !t.isEmpty {
                 latestToken = t
                 lastChange  = Date()
-                SRKLogger.log(.debug, "Push: first token captured from UserDefaults")
                 break
             }
 
@@ -98,12 +88,10 @@ final class SRKPushGate: Sendable {
         }
 
         guard let _ = latestToken else {
-            SRKLogger.log(.warning, "Push: no FCM token received — sending empty")
             return nil
         }
 
         let firstTokenTime = Date()
-        SRKLogger.log(.debug, "Push: first token captured — starting stability window")
 
         while Date() < deadline {
             try? await Task.sleep(nanoseconds: 150_000_000)
@@ -112,7 +100,6 @@ final class SRKPushGate: Sendable {
                 ?? UserDefaults.standard.string(forKey: "wbc.fcm.token")
 
             if let current, !current.isEmpty, current != latestToken {
-                SRKLogger.log(.debug, "Push: FCM changed: \(latestToken ?? "nil") → \(current)")
                 latestToken = current
                 lastChange  = Date()
             }
@@ -123,7 +110,6 @@ final class SRKPushGate: Sendable {
             if sinceFirst >= minWindowSeconds,
                let tok = latestToken, !tok.isEmpty,
                sinceChange >= debounceSeconds {
-                SRKLogger.log(.info, "Push: stable FCM token accepted (sinceFirst=\(String(format: "%.1f", sinceFirst))s, sinceChange=\(String(format: "%.1f", sinceChange))s)")
                 return tok
             }
         }
@@ -133,11 +119,9 @@ final class SRKPushGate: Sendable {
             ?? UserDefaults.standard.string(forKey: "wbc.fcm.token")
 
         if let fallback, !fallback.isEmpty {
-            SRKLogger.log(.warning, "Push: stability timeout — using best available token")
             return fallback
         }
 
-        SRKLogger.log(.warning, "Push: FCM token not received within \(maxWindowSeconds)s — sending empty")
         return nil
     }
 }

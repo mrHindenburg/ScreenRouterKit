@@ -58,8 +58,6 @@ enum SRKLogger {
         }
     }
 
-    /// Key milestone log (device ID, route decision, …) — unlike `log`, visible in
-    /// `.minimal` as well, so essential identifiers can be checked without verbose noise.
     nonisolated static func key(
         _ message: String,
         file: String = #fileID
@@ -75,8 +73,6 @@ enum SRKLogger {
         }
     }
 
-    /// AppsFlyer-scoped log — suppressed entirely when AppsFlyer isn't configured for
-    /// the current init, so af-related lines never appear in non-tracking scenarios.
     nonisolated static func af(
         _ level: SRKLogLevel,
         _ message: String,
@@ -92,9 +88,6 @@ enum SRKLogger {
         print(render(title, rows), terminator: "")
     }
 
-    /// Prints a table only when its content changed since the previous call with the
-    /// same `id`. Otherwise prints a single "— no changes" line. Used for /refresh so
-    /// an unchanged FCM (or any unchanged field set) doesn't spam the console.
     nonisolated static func tableIfChanged(_ title: String, _ rows: [(String, String)], id: String) {
         guard mode != .disabled else { return }
         let signature = rows.map { "\($0.0)=\($0.1)" }.joined(separator: "|")

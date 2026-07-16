@@ -169,7 +169,6 @@ final class SRKOrientationProxy {
             ) ? .landscapeRight : .portrait
             UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
         }
-        SRKLogger.log(.debug, "Orientation: \(mask.rawValue)")
     }
 }
 
