@@ -118,7 +118,6 @@ public struct SRKConfiguration: @unchecked Sendable {
     public let pushEnabled:                Bool
     public let fallbackURL:                String?
     public let splashProvider:             SRKSplashProvider?
-    public let debugMode:                  SRKDebugMode
     public let defaultOrientations:        UIInterfaceOrientationMask
     public let webOrientations:            UIInterfaceOrientationMask
     public let nativeOnly:                 Bool
@@ -126,7 +125,6 @@ public struct SRKConfiguration: @unchecked Sendable {
 
     public init(
         splash:              @escaping SRKSplashProvider,
-        debugMode:           SRKDebugMode               = .disabled,
         attHandling:         SRKATTHandling              = .skip,
         attDelay:            TimeInterval               = 0,
         pushEnabled:         Bool                       = false,
@@ -145,7 +143,6 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.pushEnabled                = pushEnabled
         self.fallbackURL                = nil
         self.splashProvider             = splash
-        self.debugMode                  = debugMode
         self.defaultOrientations        = defaultOrientations
         self.webOrientations            = webOrientations
         self.nativeOnly                 = nativeOnly
@@ -159,7 +156,6 @@ public struct SRKConfiguration: @unchecked Sendable {
         attHandling:                SRKATTHandling                  = .managedByLibrary,
         attDelay:                   TimeInterval,
         splash:                     SRKSplashProvider?              = nil,
-        debugMode:                  SRKDebugMode                   = .disabled,
         pushEnabled:                Bool                           = true,
         fallbackURL:                String?                        = nil,
         defaultOrientations:        UIInterfaceOrientationMask     = .portrait,
@@ -179,7 +175,6 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.pushEnabled                = pushEnabled
         self.fallbackURL                = fallbackURL
         self.splashProvider             = splash
-        self.debugMode                  = debugMode
         self.defaultOrientations        = defaultOrientations
         self.webOrientations            = webOrientations
         self.nativeOnly                 = nativeOnly
@@ -195,7 +190,6 @@ public struct SRKConfiguration: @unchecked Sendable {
         appsFlyerSignal:            SRKAppsFlyerSignal?             = nil,
         appsFlyerIDProvider:        @escaping SRKAppsFlyerIDProvider,
         splash:                     SRKSplashProvider?              = nil,
-        debugMode:                  SRKDebugMode                   = .disabled,
         pushEnabled:                Bool                           = true,
         fallbackURL:                String?                        = nil,
         defaultOrientations:        UIInterfaceOrientationMask     = .portrait,
@@ -215,7 +209,6 @@ public struct SRKConfiguration: @unchecked Sendable {
         self.pushEnabled                = pushEnabled
         self.fallbackURL                = fallbackURL
         self.splashProvider             = splash
-        self.debugMode                  = debugMode
         self.defaultOrientations        = defaultOrientations
         self.webOrientations            = webOrientations
         self.nativeOnly                 = nativeOnly

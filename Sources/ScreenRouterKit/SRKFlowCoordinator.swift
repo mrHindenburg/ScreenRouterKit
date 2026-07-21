@@ -105,8 +105,6 @@ final class SRKFlowCoordinator {
             }
 
         case .failure(let error):
-            SRKLogger.log(.error, "Coordinator: register error — \(error.localizedDescription)")
-
             if error == .noNetwork {
                 viewModel?.setMain()
                 resolved = true

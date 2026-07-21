@@ -24,8 +24,6 @@ final class SRKRouterViewModel: ObservableObject {
     }
 
     func begin(config: SRKConfiguration) {
-        SRKLogger.mode = config.debugMode
-
         let coord = SRKFlowCoordinator(config: config)
         coord.viewModel = self
         self.coordinator = coord

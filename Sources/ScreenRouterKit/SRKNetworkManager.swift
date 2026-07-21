@@ -65,7 +65,7 @@ final class SRKNetworkManager: Sendable {
             for (k, v) in extra { body[k] = v }
         }
 
-        return await performRequest(url: url, body: body, tag: "INSTALL")
+        return await performRequest(url: url, body: body)
     }
 
     func refresh(
@@ -98,24 +98,17 @@ final class SRKNetworkManager: Sendable {
             request.timeoutInterval = 15
             request.httpBody = try JSONEncoder().encode(body)
 
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard response is HTTPURLResponse else {
                 return
             }
 
-            let rows = Self.bodyRows(body as [String: Any])
-            SRKLogger.tableIfChanged("REFRESH", rows, id: "refresh")
-
-            if !(200...299).contains(http.statusCode) {
-                let responseBody = Self.responseBodyString(data)
-                SRKLogger.log(.error, "Refresh: server error \(http.statusCode) — response: \(responseBody ?? "—")")
-            }
+            SRKLogger.sync(Self.bodyRows(body as [String: Any]))
         } catch {
-            SRKLogger.log(.error, "Refresh: error — \(error.localizedDescription)")
         }
     }
 
-    /// Builds ordered rows for the INSTALL / REFRESH log tables from a request body.
+    /// Builds ordered rows for the INSTALL / SYNC log tables from a request body.
     /// The log is intentionally trimmed to a short whitelist; the request body still
     /// sends everything, only the printed table is reduced.
     private static func bodyRows(_ body: [String: Any]) -> [(String, String)] {
@@ -149,8 +142,7 @@ final class SRKNetworkManager: Sendable {
 
     private func performRequest<T: Decodable>(
         url: URL,
-        body: [String: Any],
-        tag: String
+        body: [String: Any]
     ) async -> Result<T, SRKAPIError> {
 
         var request = URLRequest(url: url)
@@ -171,16 +163,14 @@ final class SRKNetworkManager: Sendable {
                 return .failure(.invalidResponse)
             }
 
-            SRKLogger.table(tag, Self.bodyRows(body))
+            SRKLogger.install(Self.bodyRows(body))
 
             guard (200...299).contains(http.statusCode) else {
                 let responseBody = Self.responseBodyString(data)
-                SRKLogger.log(.error, "\(tag): server error \(http.statusCode) — response: \(responseBody ?? "—")")
                 return .failure(.serverError(http.statusCode, responseBody))
             }
 
             if http.statusCode == 204 || data.isEmpty {
-                SRKLogger.log(.info, "\(tag): 204 / empty body → main")
                 let emptyJSON = Data("{\"url\":\"\"}".utf8)
                 if let result = try? JSONDecoder().decode(T.self, from: emptyJSON) {
                     return .success(result)

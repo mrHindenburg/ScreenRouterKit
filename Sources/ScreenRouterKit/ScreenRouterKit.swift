@@ -57,7 +57,6 @@ public final class ScreenRouterKit {
         transition:          SRKTransitionConfig          = .fade,
         @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:           SRKDebugMode                 = .disabled,
         defaultOrientations: UIInterfaceOrientationMask   = .portrait,
         webOrientations:     UIInterfaceOrientationMask   = .all
     ) -> some View {
@@ -66,7 +65,6 @@ public final class ScreenRouterKit {
 
         let config = SRKConfiguration(
             splash:              { onComplete in AnyView(splash(onComplete)) },
-            debugMode:           debugMode,
             defaultOrientations: defaultOrientations,
             webOrientations:     webOrientations
         )
@@ -84,7 +82,6 @@ public final class ScreenRouterKit {
         transition:          SRKTransitionConfig          = .fade,
         @ViewBuilder splash: @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:           SRKDebugMode                 = .disabled,
         attHandling:         SRKATTHandling               = .managedByLibrary,
         attDelay:            TimeInterval,
         pushEnabled:         Bool                         = true,
@@ -96,7 +93,6 @@ public final class ScreenRouterKit {
 
         let config = SRKConfiguration(
             splash:              { onComplete in AnyView(splash(onComplete)) },
-            debugMode:           debugMode,
             attHandling:         attHandling,
             attDelay:            attDelay,
             pushEnabled:         pushEnabled,
@@ -118,7 +114,6 @@ public final class ScreenRouterKit {
         appId:                String,
         @ViewBuilder splash:  @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:            SRKDebugMode,
         transition:           SRKTransitionConfig          = .fade,
         fallbackURL:          String?                      = nil,
         nativeOnly:           Bool                         = false,
@@ -137,7 +132,6 @@ public final class ScreenRouterKit {
             attHandling:          .skip,
             attDelay:             0,
             splash:               { onComplete in AnyView(splash(onComplete)) },
-            debugMode:            debugMode,
             pushEnabled:          false,
             fallbackURL:          fallbackURL,
             defaultOrientations:  defaultOrientations,
@@ -158,7 +152,6 @@ public final class ScreenRouterKit {
         appId:                String,
         @ViewBuilder splash:  @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:            SRKDebugMode,
         transition:           SRKTransitionConfig          = .fade,
         attDelay:             TimeInterval                 = 2.0,
         fallbackURL:          String?                      = nil,
@@ -178,7 +171,6 @@ public final class ScreenRouterKit {
             attHandling:          .managedByLibrary,
             attDelay:             attDelay,
             splash:               { onComplete in AnyView(splash(onComplete)) },
-            debugMode:            debugMode,
             pushEnabled:          true,
             fallbackURL:          fallbackURL,
             defaultOrientations:  defaultOrientations,
@@ -199,7 +191,6 @@ public final class ScreenRouterKit {
         appId:                String,
         @ViewBuilder splash:  @escaping (_ onComplete: @escaping () -> Void) -> S,
         @ViewBuilder mainView: @escaping () -> M,
-        debugMode:            SRKDebugMode,
         transition:           SRKTransitionConfig          = .fade,
         attDelay:             TimeInterval                 = 2.0,
         fallbackURL:          String?                      = nil,
@@ -233,7 +224,6 @@ public final class ScreenRouterKit {
             appsFlyerSignal:            appsFlyerSignal,
             appsFlyerIDProvider:        { UserDefaults.standard.string(forKey: "wbc.appsflyer.id") },
             splash:                     { onComplete in AnyView(splash(onComplete)) },
-            debugMode:                  debugMode,
             pushEnabled:                true,
             fallbackURL:                fallbackURL,
             defaultOrientations:        defaultOrientations,
@@ -243,7 +233,9 @@ public final class ScreenRouterKit {
             extraInstallFieldsProvider: SRKAppsFlyerFields.shared.extraFields
         )
         configure(config)
-        SRKAppsFlyerFields.setDebugMode(debugMode == .verbose)
+        #if DEBUG
+        SRKAppsFlyerFields.setDebugMode(true)
+        #endif
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.start() }
 
@@ -283,8 +275,6 @@ public final class ScreenRouterKit {
     
     private func configure(_ config: SRKConfiguration) {
         self.config = config
-        SRKLogger.mode = config.debugMode
-        SRKLogger.appsFlyerEnabled = config.appsFlyerIDProvider != nil
     }
     
     private func makeRootView() -> some View {
@@ -310,8 +300,7 @@ public final class ScreenRouterKit {
     private func startSimple() {
         guard let config, !started else { return }
         started = true
-        SRKLogger.mode = config.debugMode
-        
+
         Task { @MainActor in
             let attGate = SRKATTGate(handling: config.attHandling, delay: config.attDelay)
             let attAuthorized = await attGate.requestIfNeeded()

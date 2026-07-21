@@ -62,7 +62,6 @@ open class SRKAppDelegate: NSObject, UIApplicationDelegate {
                 if afInstance.responds(to: uidSel),
                    let uid = afInstance.perform(uidSel)?.takeUnretainedValue() as? String {
                     UserDefaults.standard.set(uid, forKey: "wbc.appsflyer.id")
-                    SRKLogger.af(.info, "AppDelegate: AppsFlyer UID saved")
                 }
             }
 
